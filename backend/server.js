@@ -7,16 +7,19 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Cấu hình kết nối MySQL
-const db = mysql.createConnection({
+// Cấu hình kết nối MySQL bằng Pool để tránh bị disconnect do timeout
+const db = mysql.createPool({
     host: 'localhost',
     user: 'root',
     password: '123456', // Mật khẩu bạn đã cung cấp
-    database: 'crud_db'
+    database: 'crud_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-// Kết nối và tạo bảng tự động
-db.connect((err) => {
+// Kiểm tra kết nối và tạo bảng tự động
+db.getConnection((err, connection) => {
     if (err) {
         console.error('Lỗi kết nối MySQL. Vui lòng đảm bảo bạn đã cài và bật MySQL Server:', err.message);
         return;
@@ -29,8 +32,9 @@ db.connect((err) => {
         title VARCHAR(255) NOT NULL,
         completed BOOLEAN NOT NULL DEFAULT false
     )`;
-    db.query(createTableQuery, (err) => {
+    connection.query(createTableQuery, (err) => {
         if (err) console.error("Lỗi tạo bảng: ", err.message);
+        connection.release();
     });
 });
 
