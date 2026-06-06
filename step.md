@@ -242,6 +242,7 @@ git add frontend/src/App.jsx
 git commit -m "Cập nhật giao diện: Thêm thông báo kiểm tra CI/CD"
 git push
 ```
+![cicd chạy](./image_step/anh_12_cicd.png)
 
 ### Bước 4.3: Hưởng thụ thành quả tự động hóa
 Ngay sau khi lệnh Push hoàn tất, hệ thống GitHub Actions sẽ lập tức bắt được tín hiệu "có code mới" và kích hoạt luồng Deploy.
