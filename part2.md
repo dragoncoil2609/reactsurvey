@@ -53,3 +53,21 @@ Dưới đây là 4 nhóm sự kiện "bá đạo" mà bạn bắt buộc phải
 - **Tình huống:** Bạn viết một kịch bản: *"Mỗi khi có người bình luận vào một Issue, hãy chạy lệnh ABC"*. Bạn viết kịch bản này trên nhánh `bug-fix-1`.
 - **Cách GitHub hiểu:** Một cái Issue (lỗi báo cáo) là thứ của chung toàn bộ dự án, nó không thuộc về riêng nhánh code nào cả. Vậy khi có người comment vào Issue, GitHub phải dùng file YAML ở nhánh nào để đọc lệnh?
 - **Cơ chế bắt buộc:** Câu trả lời tiếp tục là: **Nó chỉ lấy file YAML ở nhánh `main` để chạy**. Nếu kịch bản đó ở `bug-fix-1`, nó sẽ ngó lơ.
+
+---
+
+## 3. Hệ sinh thái `workflow_*`: Vũ khí xây dựng CI/CD quy mô lớn
+
+Như mentor đã gợi ý với từ khóa `workflow_*`, đây là bộ 3 sự kiện nâng cao giúp biến một luồng CI/CD đơn giản thành một dây chuyền tự động hóa thực thụ cho hệ thống lớn (Enterprise). Cả 3 sự kiện này đều mang đặc điểm chung: **Bắt buộc phải tồn tại trên nhánh mặc định (`main`) thì mới nhận diện được sự kiện**.
+
+### 3.1. `workflow_dispatch` (Nút bấm thủ công)
+Như đã giải thích ở Nhóm 3 phía trên, sự kiện này sinh ra một nút bấm "Run workflow" trên giao diện GitHub. Nó rất hữu ích khi sếp yêu cầu: *"Chỉ được phép Deploy lên Production vào đúng 9h sáng thứ Hai"*. 
+Điểm "ăn tiền" nhất là bạn có thể tạo ra các ô nhập liệu (inputs) để người bấm nút bắt buộc phải điền thông tin (ví dụ: chọn môi trường Deploy là Staging hay Production) trước khi chạy.
+
+### 3.2. `workflow_call` (Workflow dùng chung - Reusable Workflow)
+- **Tác dụng:** Biến một file YAML thành một "Thư viện" (Function) để các file YAML khác gọi lại.
+- **Ứng dụng thực tế:** Nếu công ty bạn có 50 dự án (50 repo) giống nhau, thay vì copy/paste file `deploy.yml` sang 50 chỗ, bạn chỉ cần tạo **MỘT** file YAML duy nhất ở repo trung tâm dùng `on: workflow_call`. Sau đó, 50 repo kia chỉ cần trỏ link gọi đến file này. Nếu sau này cần sửa cách deploy, bạn chỉ cần sửa đúng 1 chỗ! Đây là đỉnh cao của tư duy quản lý theo chuẩn **DRY (Don't Repeat Yourself)** trong DevOps.
+
+### 3.3. `workflow_run` (Dây chuyền nối tiếp)
+- **Tác dụng:** Tự động kích hoạt Workflow B ngay lập tức sau khi Workflow A vừa chạy xong.
+- **Ứng dụng thực tế:** Giúp tách biệt rõ ràng các nhiệm vụ. Ví dụ: Bạn tạo file `test.yml` chuyên chạy Unit Test. Bạn muốn rằng: *"Chỉ khi file test.yml báo xanh (thành công 100%), thì file deploy.yml mới được phép tự động chạy"*. `workflow_run` sinh ra chính là để tạo ra các mắt xích móc nối chặt chẽ như vậy.
