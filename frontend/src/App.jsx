@@ -64,7 +64,7 @@ function App() {
     <div className="app-container">
       <div className="glass-card">
         <h1 className="title">
-          <span className="gradient-text">TaskMaster</span>
+          <span className="gradient-text">TaskMaster (Đã tự động hóa CI/CD!)</span>
         </h1>
         
         <form onSubmit={addTask} className="input-group">
