@@ -211,4 +211,46 @@ Mở tab **Actions** trên kho GitHub để kiểm tra. Quá trình sẽ tự đ
 
 ![Giao diện tab Actions báo xanh lá cây "Success" của cả 3 bước workflow](./image_step/anh_9_github_actions_success.png)
 
-Từ bây giờ, mỗi khi có code mới được Push lên nhánh main, ứng dụng sẽ tự động được triển khai lên máy chủ EC2. Quá trình CI/CD hoàn tất!
+Từ bây giờ, mỗi khi có code mới được Push lên nhánh main, ứng dụng sẽ tự động được triển khai lên máy chủ EC2. Quá trình cấu hình CI/CD hoàn tất!
+
+## Phần 4: Kiểm chứng tính năng CI/CD tự động
+
+Sau khi thiết lập thành công, bước tiếp theo là kiểm chứng tính năng tự động hóa bằng cách thực hiện một thay đổi nhỏ trên giao diện Frontend và quan sát kết quả thực tế trên server.
+
+### Bước 4.1: Chỉnh sửa mã nguồn Frontend
+*Giải thích: Thao tác này giả lập quá trình phát triển (development) thực tế. Lập trình viên chỉ cần thay đổi code tại máy cá nhân, mọi việc triển khai còn lại hệ thống CI/CD sẽ tự lo.*
+
+Mở file `frontend/src/App.jsx` trên máy tính cá nhân, tìm đến phần giao diện và sửa đổi một đoạn văn bản (text) hoặc thêm một nút bấm (button) để dễ dàng nhận diện phiên bản mới. Ví dụ:
+
+```jsx
+// Tìm dòng chứa thẻ <h1> và sửa thành:
+<h1>🚀 To-Do List (Đã tự động hóa CI/CD!)</h1>
+
+// Hoặc chèn thêm một đoạn text thông báo bên dưới:
+<p style={{ color: 'green', textAlign: 'center', fontWeight: 'bold' }}>
+  Phiên bản mới nhất đã lên sóng tự động!
+</p>
+```
+
+![Chụp màn hình VS Code vị trí vừa sửa file App.jsx](./image_step/anh_10_sua_code_fe.png)
+
+### Bước 4.2: Đẩy code lên GitHub (Push)
+Thực hiện các lệnh Git quen thuộc trên Terminal của máy cá nhân để ghi nhận sự thay đổi và đẩy code lên nhánh `main`:
+
+```bash
+git add frontend/src/App.jsx
+git commit -m "Cập nhật giao diện: Thêm thông báo kiểm tra CI/CD"
+git push
+```
+
+### Bước 4.3: Hưởng thụ thành quả tự động hóa
+Ngay sau khi lệnh Push hoàn tất, hệ thống GitHub Actions sẽ lập tức bắt được tín hiệu "có code mới" và kích hoạt luồng Deploy.
+
+1. Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trình mới đang tự động chạy qua các bước Build và Deploy.
+2. Đợi khoảng 1-2 phút cho đến khi tất cả các bước báo dấu tick xanh lá.
+3. Mở trình duyệt và truy cập lại vào **Public IP** của máy chủ EC2. 
+4. Giao diện mới với dòng chữ vừa sửa sẽ lập tức hiện ra mà bạn không cần phải đăng nhập SSH hay gõ bất kỳ dòng lệnh nào trên server!
+
+![Chụp màn hình trình duyệt với giao diện web đã được cập nhật thành công](./image_step/anh_11_web_update_thanh_cong.png)
+
+Đây chính là giá trị cốt lõi của DevOps và quy trình CI/CD: Giải phóng lập trình viên khỏi các tác vụ thủ công lặp đi lặp lại, giúp họ chỉ cần tập trung hoàn toàn vào việc phát triển tính năng.
