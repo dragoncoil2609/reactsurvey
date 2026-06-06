@@ -28,7 +28,6 @@ Thao tác trên giao diện của AWS:
 4. **Security Group**: Mở port `22` (để SSH) và port `80` (để truy cập Web).
 5. Tạo và tải về máy một **Key Pair** (ví dụ: `my-key.pem`).
 
-![Giao diện tạo EC2 trên AWS Console, focus vào cấu hình Security Group](./image_step/anh_2_tao_ec2.png)
 
 ### Bước 2.2: Cài đặt Docker bằng Shell Script
 Mở terminal và SSH vào server vừa tạo bằng lệnh sau:
@@ -108,6 +107,8 @@ docker-compose down
 Khi mã nguồn và server đã sẵn sàng, tiến hành thiết lập luồng CI/CD tự động 3 bước: **Build -> Deploy -> Show Log**.
 
 ### Bước 3.1: Thiết lập GitHub Secrets
+*Giải thích: Mục đích của bước này là cung cấp thông tin xác thực để môi trường GitHub Actions có quyền kết nối vào máy chủ EC2. Việc lưu trữ thông tin trong hệ thống Secrets giúp bảo vệ địa chỉ IP và khóa SSH, ngăn chặn rò rỉ thông tin nhạy cảm công khai trên kho mã nguồn.*
+
 Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions** và thêm 3 biến bảo mật sau:
 1. `EC2_HOST`: Địa chỉ IP Public của EC2.
 2. `EC2_USERNAME`: `ubuntu`
@@ -116,6 +117,11 @@ Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions
 ![Giao diện trang Settings/Secrets trên GitHub với 3 biến đã được thêm](./image_step/anh_7_github_secrets.png)
 
 ### Bước 3.2: Tạo Workflow File
+*Giải thích: File YAML này đóng vai trò là kịch bản (pipeline) chỉ đạo GitHub thực hiện chuỗi 3 công việc (jobs) một cách tuần tự mỗi khi có thay đổi trên nhánh `main`:*
+*- **Build**: Kiểm tra thử việc đóng gói Docker Image để đảm bảo mã nguồn không bị hỏng trước khi đưa lên server thực tế.*
+*- **Deploy**: Tự động sao chép mã nguồn mới sang máy ảo EC2 qua giao thức SCP, sau đó gửi lệnh SSH để yêu cầu Docker Compose khởi động lại hệ thống với phiên bản mới nhất.*
+*- **Show log**: In trạng thái hoạt động của các container ra màn hình giao diện GitHub để người quản trị dễ dàng giám sát.*
+
 Tại máy tính cá nhân, tạo một file tên là `.github/workflows/deploy.yml` trong thư mục dự án:
 
 ```yaml
@@ -194,6 +200,8 @@ jobs:
 ![Chụp màn hình code file deploy.yml trên VS Code](./image_step/anh_8_deploy_yml.png)
 
 ### Bước 3.3: Kết quả triển khai tự động
+*Giải thích: Bước này đóng vai trò kích hoạt chu trình CI/CD vừa thiết lập. Thông qua tab Actions, người quản trị có thể giám sát toàn bộ quá trình tự động hóa theo thời gian thực (real-time) mà không cần phải đăng nhập trực tiếp vào máy chủ EC2.*
+
 Thực hiện commit file `deploy.yml` và push lên nhánh `main`. 
 
 Mở tab **Actions** trên kho GitHub để kiểm tra. Quá trình sẽ tự động chạy nối tiếp 3 bước (Build, Deploy, Show log). 
