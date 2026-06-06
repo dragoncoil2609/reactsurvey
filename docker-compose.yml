@@ -12,13 +12,19 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     container_name: crud_backend
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       - DB_HOST=db       # Quan trọng: Trỏ host tới container 'db'
       - DB_USER=root
