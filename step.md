@@ -144,7 +144,7 @@ jobs:
       - name: Kiểm tra Build Frontend & Backend
         run: |
           echo "Thử build Docker Image để đảm bảo code không lỗi trước khi deploy..."
-          docker-compose build
+          docker compose build
 
   # Bước 2: Bắn code sang EC2 và yêu cầu Docker khởi chạy
   deploy:
