@@ -9,10 +9,10 @@ app.use(express.json());
 
 // Cấu hình kết nối MySQL bằng Pool để tránh bị disconnect do timeout
 const db = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '123456', // Mật khẩu bạn đã cung cấp
-    database: 'crud_db',
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '123456',
+    database: process.env.DB_NAME || 'crud_db',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0

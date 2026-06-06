@@ -3,7 +3,7 @@ import axios from 'axios';
 import { CheckCircle2, Circle, Trash2, Plus, Loader2 } from 'lucide-react';
 import './index.css';
 
-const API_URL = 'http://localhost:3000/tasks';
+const API_URL = '/api/tasks';
 
 function App() {
   const [tasks, setTasks] = useState([]);
