@@ -18,25 +18,32 @@ const db = mysql.createPool({
     queueLimit: 0
 });
 
-// Kiểm tra kết nối và tạo bảng tự động
-db.getConnection((err, connection) => {
-    if (err) {
-        console.error('Lỗi kết nối MySQL. Vui lòng đảm bảo bạn đã cài và bật MySQL Server:', err.message);
-        return;
-    }
-    console.log('Đã kết nối tới MySQL database.');
+// Hàm khởi tạo DB có cơ chế tự động thử lại (retry)
+const initDb = () => {
+    db.getConnection((err, connection) => {
+        if (err) {
+            console.error('Lỗi kết nối MySQL, thử lại sau 3 giây...', err.message);
+            setTimeout(initDb, 3000); // Thử lại sau 3 giây nếu DB chưa sẵn sàng
+            return;
+        }
+        console.log('Đã kết nối tới MySQL database.');
 
-    const createTableQuery = `
-    CREATE TABLE IF NOT EXISTS tasks (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        completed BOOLEAN NOT NULL DEFAULT false
-    )`;
-    connection.query(createTableQuery, (err) => {
-        if (err) console.error("Lỗi tạo bảng: ", err.message);
-        connection.release();
+        const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            completed BOOLEAN NOT NULL DEFAULT false
+        )`;
+        connection.query(createTableQuery, (err) => {
+            if (err) console.error("Lỗi tạo bảng: ", err.message);
+            else console.log("Bảng tasks đã được đảm bảo tạo thành công.");
+            connection.release();
+        });
     });
-});
+};
+
+// Gọi hàm khởi tạo
+initDb();
 
 // Create
 app.post('/tasks', (req, res) => {
