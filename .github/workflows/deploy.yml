@@ -1,0 +1,70 @@
+name: CI/CD Pipeline Docker
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
+  build:
+    name: 1. Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Kiểm tra Build Frontend & Backend
+        run: |
+          echo "Thử build Docker Image để đảm bảo code không lỗi trước khi deploy..."
+          docker-compose build
+
+  # Bước 2: Bắn code sang EC2 và yêu cầu Docker khởi chạy
+  deploy:
+    name: 2. Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy source code lên EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "./*"
+          target: "~/app"
+
+      - name: Triển khai bằng Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app
+            # Dừng các container cũ và khởi động lại với code mới (chạy ngầm)
+            docker-compose down
+            docker-compose up -d --build
+
+  # Bước 3: Kiểm tra trạng thái các Container
+  show_log:
+    name: 3. Test / Show log
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: In log trạng thái
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/app
+            echo "--- Danh sách Container đang chạy ---"
+            docker ps
+            
+            echo "--- LOG CỦA BACKEND VÀ FRONTEND ---"
+            docker-compose logs --tail=50
