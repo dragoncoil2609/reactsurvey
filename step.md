@@ -130,7 +130,7 @@ name: CI/CD Pipeline Docker
 on:
   push:
     branches:
-      - main
+      - main # [TÙY CHỈNH] Thay bằng nhánh kích hoạt CI/CD của bạn (vd: master, dev)
 
 jobs:
   # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
@@ -141,12 +141,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Kiểm tra Build Frontend & Backend
+      - name: Kiểm tra Build dự án
         run: |
           echo "Thử build Docker Image để đảm bảo code không lỗi trước khi deploy..."
+          # [TÙY CHỈNH] Lệnh build tương ứng với dự án
           docker compose build
 
-  # Bước 2: Bắn code sang EC2 và yêu cầu Docker khởi chạy
+  # Bước 2: Bắn code sang Server và yêu cầu Docker khởi chạy
   deploy:
     name: 2. Deploy
     runs-on: ubuntu-latest
@@ -155,26 +156,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy source code lên EC2
+      - name: Copy source code lên Server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.EC2_HOST }}         # Khai báo IP Server trong GitHub Secrets
+          username: ${{ secrets.EC2_USERNAME }} # Khai báo User (vd: ubuntu, root)
+          key: ${{ secrets.EC2_SSH_KEY }}       # Khóa Private Key .pem
           source: "./*"
-          target: "~/app"
+          target: "~/app"                       # [TÙY CHỈNH] Đường dẫn thư mục chứa code trên Server
 
-      - name: Triển khai bằng Docker Compose
+      - name: Triển khai tự động bằng Docker Compose
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # [TÙY CHỈNH] Di chuyển vào thư mục chứa dự án
             cd ~/app
+            
             # Dừng các container cũ và khởi động lại với code mới (chạy ngầm)
-            docker-compose down
-            docker-compose up -d --build
+            docker compose down
+            docker compose up -d --build
 
   # Bước 3: Kiểm tra trạng thái các Container
   show_log:
@@ -189,12 +192,12 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/app
+            cd ~/app # [TÙY CHỈNH] Di chuyển vào thư mục chứa dự án
             echo "--- Danh sách Container đang chạy ---"
             docker ps
             
-            echo "--- LOG CỦA BACKEND VÀ FRONTEND ---"
-            docker-compose logs --tail=50
+            echo "--- LOG HOẠT ĐỘNG ---"
+            docker compose logs --tail=50
 ```
 
 ![Chụp màn hình code file deploy.yml trên VS Code](./image_step/anh_8_deploy_yml.png)
