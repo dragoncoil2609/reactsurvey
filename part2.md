@@ -91,7 +91,12 @@ Trong các dự án NodeJS hay ReactJS, mỗi lần chạy CI/CD là một lần
 ## Matrix strategy
 
 **Bản chất (Lý thuyết):**
-Khi xây dựng các ứng dụng phức tạp, việc đảm bảo mã nguồn chạy ổn định trên đa dạng các môi trường là bắt buộc. Thay vì phải nhân bản (copy) file YAML ra thành hàng tá phiên bản đứt gãy để test từng cái một, chiến lược Ma trận (Matrix) cho phép định nghĩa một mảng các biến số đa chiều. Từ đó, GitHub Actions sẽ tự động nhân bản ra hàng loạt luồng chạy song song để phủ kín mọi tổ hợp môi trường.
+Bất cứ khi nào bạn thấy mình phải lặp đi lặp lại một khối lệnh (chỉ khác nhau mỗi môi trường hoặc tên thư mục), đó là lúc dùng đến Matrix. Thay vì phải copy file YAML ra thành hàng tá phiên bản rất dễ gây sai sót, Matrix đóng vai trò như một "Cỗ máy nhân bản cấu hình". Bạn chỉ cần viết code 1 lần, khai báo một mảng biến số, và GitHub Actions sẽ tự động tách ra hàng loạt tiến trình chạy song song.
+
+Thực tế, tính năng này là vũ khí bắt buộc phải có trong 1 vài trường hợp:
+1. **Test tính tương thích (Open Source):** Đảm bảo mã nguồn chạy trơn tru trên mọi tổ hợp hệ điều hành (Windows, macOS, Ubuntu) và các phiên bản môi trường (Node 16, 18, 20).
+2. **Build Docker đa kiến trúc:** Tự động build ra nhiều phiên bản Image phục vụ cùng lúc cho server chạy chip Intel (`amd64`) và chip Apple M1/AWS Graviton (`arm64`).
+3. **Deploy Microservices:** Thay vì viết 5 file YAML, bạn chỉ dùng 1 file duy nhất để lặp lại việc build tự động cho hàng loạt service nhỏ (user-service, order-service, payment-service...).
 
 **Cách triển khai (Step-by-step):**
 - **Bước 1: Khai báo các chiều không gian của ma trận**
