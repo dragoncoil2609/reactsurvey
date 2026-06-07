@@ -119,7 +119,7 @@ Nếu bạn chỉ push file định nghĩa nút bấm lên nhánh `dev` mà chư
 **Bước 3: Sự linh hoạt của việc chọn nhánh**
 Điểm thú vị nhất của `workflow_dispatch` nằm ở đây: Tuy file định nghĩa nút bấm bắt buộc phải "ký gửi" ở `main`, nhưng khi chạy, GitHub cho phép bạn **chọn lấy code từ bất kỳ nhánh nào**.
 
-![Điểm đáng chú ý: ô chọn nhánh (Use workflow from) cho phép chạy trên nhánh bất kỳ.](./image_step/3_3_dispatch_branch_selector.png)
+![Điểm đáng chú ý: ô chọn nhánh (Use workflow from) cho phép chạy trên nhánh bất kỳ.](./image_step/3_2_dispatch_button_appeared.png)
 
 ### `workflow_call`
 
