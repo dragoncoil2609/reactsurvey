@@ -6,7 +6,55 @@ Bài viết này hướng dẫn chi tiết cách "đóng gói" một ứng dụn
 
 ---
 
-## Phần 1: Chuẩn bị Source Code (Thực hiện trên máy cá nhân)
+## CI/CD là gì
+
+- **CI (Continuous Integration - Tích hợp liên tục):** Là tự động hóa việc gộp code, build và chạy test thường xuyên mỗi khi có code mới đẩy lên nhánh chung.
+- **CD (Continuous Delivery/Deployment - Phân phối/Triển khai liên tục):** Là tự động đóng gói ứng dụng và đưa nó lên các môi trường (Staging, Production) một cách liền mạch.
+
+## Tại sao cần CI/CD
+
+- Loại bỏ hoàn toàn sự rườm rà, sai sót của con người (như SSH vào server gõ lệnh thủ công).
+- Giúp team phát hiện lỗi (bug) cực sớm nhờ quá trình Test tự động.
+- Tốc độ đưa tính năng mới ra thị trường nhanh gấp nhiều lần.
+
+## Các stage chuẩn của pipeline
+
+Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đoạn:
+- **Source/Checkout:** Lấy mã nguồn mới nhất từ kho lưu trữ.
+- **Build:** Đóng gói mã nguồn thành sản phẩm (như Build Docker Image, dịch mã Java...).
+- **Test:** Chạy các bài kiểm thử tự động (Unit Test, Integration Test).
+- **Deploy:** Triển khai sản phẩm hoàn thiện lên Server.
+
+## Thuật ngữ Github Actions: workflow / job / step / action / runner (hosted vs self-hosted) / event / secret / artifact / environment
+
+- **Workflow:** Một luồng CI/CD hoàn chỉnh (tương ứng với 1 file YAML).
+- **Job:** Một cụm tác vụ trong workflow. (Ví dụ Job Build, Job Deploy).
+- **Step:** Một bước nhỏ trong Job (ví dụ: gõ một lệnh bash).
+- **Action:** Các công cụ có sẵn được cộng đồng viết để tái sử dụng (như action copy file, action đăng nhập docker).
+- **Runner:** Máy chủ (VM) đứng ra chạy các lệnh của bạn.
+  - *Hosted runner:* Máy ảo do GitHub cung cấp sẵn (miễn phí).
+  - *Self-hosted runner:* Máy chủ riêng do bạn tự cung cấp và gắn vào GitHub.
+- **Event:** Sự kiện "bóp cò" kích hoạt workflow (như `push`, `pull_request`).
+- **Secret:** Biến môi trường mã hóa (dùng chứa mật khẩu, API key, SSH key).
+- **Artifact:** Sản phẩm sinh ra giữa chừng (như file nén `.zip`, file `.jar`) được lưu lại để tải về hoặc chuyển cho Job sau.
+- **Environment:** Môi trường triển khai ảo (như `production`, `staging`) dùng để thiết lập lớp rào chắn phê duyệt (Reviewers).
+
+## Test trong CI
+
+Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn bắt buộc để đảm bảo nhánh chính luôn "xanh rờn".
+
+## Deploy strategies
+
+Khi đẩy code mới lên Production, chúng ta có các chiến lược để tránh làm sập web người dùng:
+- **Rolling Deployment:** Cập nhật từ từ từng máy chủ một.
+- **Blue-Green Deployment:** Tạo hẳn một môi trường mới tinh (Green), test chạy mượt rồi mới đổi đường dẫn (Router) từ môi trường cũ (Blue) sang môi trường mới. Rất an toàn, có lỗi thì lùi lại ngay lập tức.
+- **Canary Deployment:** Đưa bản mới cho 5% lượng người dùng truy cập. Thấy ổn định thì mở dần lên 100%.
+
+---
+
+## Case study: dựng pipeline đầu tiên
+
+### Chuẩn bị Source Code (Thực hiện trên máy cá nhân)
 
 Trước khi thao tác với server, mã nguồn dự án cần được cấu hình Docker và đẩy lên GitHub. Để tiết kiệm thời gian, có thể tham khảo trực tiếp source code mẫu đã được setup sẵn từ A-Z (đã bao gồm file `docker-compose.yml`, cấu hình Nginx proxy và kết nối DB bằng biến môi trường).
 
@@ -15,21 +63,17 @@ https://github.com/dragoncoil2609/reactsurvey.git
 
 ![Chụp màn hình kho GitHub chứa mã nguồn mẫu đã chuẩn bị sẵn](./image_step/anh_1_github_repo.png)
 
----
+### Chuẩn bị Server và Chạy thử (Thực hiện trên AWS EC2)
 
-## Phần 2: Chuẩn bị Server và Chạy thử (Thực hiện trên AWS EC2)
-
-### Bước 2.1: Tạo máy ảo EC2
+**1. Tạo máy ảo EC2**
 Thao tác trên giao diện của AWS:
-
 1. Đăng nhập AWS Console, vào dịch vụ **EC2** > chọn **Launch Instance**.
 2. **OS**: Chọn **Ubuntu Server 22.04 LTS** (hoặc 24.04 LTS).
 3. **Network**: Dùng Default VPC để có sẵn Public IP.
 4. **Security Group**: Mở port `22` (để SSH) và port `80` (để truy cập Web).
 5. Tạo và tải về máy một **Key Pair** (ví dụ: `my-key.pem`).
 
-
-### Bước 2.2: Cài đặt Docker bằng Shell Script
+**2. Cài đặt Docker bằng Shell Script**
 Mở terminal và SSH vào server vừa tạo bằng lệnh sau:
 ```bash
 ssh -i /path/to/my-key.pem ubuntu@<PUBLIC_IP_CỦA_EC2>
@@ -39,14 +83,14 @@ ssh -i /path/to/my-key.pem ubuntu@<PUBLIC_IP_CỦA_EC2>
 
 Sử dụng đoạn script sau để tự động cài đặt Docker và Docker Compose:
 
-**1. Tạo file script:**
+Tạo file script:
 ```bash
 mkdir tools && cd tools
 mkdir docker && cd docker/
 nano install-docker.sh
 ```
 
-**2. Copy/Paste nội dung này vào file:**
+Copy/Paste nội dung này vào file:
 ```bash
 #!/bin/bash
 sudo apt update
@@ -64,7 +108,7 @@ docker-compose --version
 ```
 *(Sử dụng tổ hợp phím Ctrl+O, Enter để lưu, rồi Ctrl+X để thoát).*
 
-**3. Chạy script cài đặt:**
+Chạy script cài đặt:
 ```bash
 chmod +x install-docker.sh
 bash install-docker.sh
@@ -76,7 +120,7 @@ sudo usermod -aG docker ubuntu
 
 ![Màn hình hiển thị phiên bản Docker & Docker Compose sau khi cài xong](./image_step/anh_4_docker_version.png)
 
-### Bước 2.3: Chạy thử thủ công (Manual Deploy)
+**3. Chạy thử thủ công (Manual Deploy)**
 *Nguyên tắc của DevOps: Luôn đảm bảo ứng dụng chạy được thủ công trước khi thiết lập CI/CD tự động.*
 
 1. Clone source code từ kho GitHub về máy ảo EC2:
@@ -100,14 +144,12 @@ docker-compose up -d --build
 docker-compose down
 ```
 
----
-
-## Phần 3: Cấu hình CI/CD bằng GitHub Actions (Tự động hóa)
+### Cấu hình CI/CD bằng GitHub Actions (Tự động hóa)
 
 Khi mã nguồn và server đã sẵn sàng, tiến hành thiết lập luồng CI/CD tự động 3 bước: **Build -> Deploy -> Show Log**.
 
-### Bước 3.1: Thiết lập GitHub Secrets
-*Giải thích: Mục đích của bước này là cung cấp thông tin xác thực để môi trường GitHub Actions có quyền kết nối vào máy chủ EC2. Việc lưu trữ thông tin trong hệ thống Secrets giúp bảo vệ địa chỉ IP và khóa SSH, ngăn chặn rò rỉ thông tin nhạy cảm công khai trên kho mã nguồn.*
+**1. Thiết lập GitHub Secrets**
+*Giải thích: Mục đích của bước này là cung cấp thông tin xác thực để môi trường GitHub Actions có quyền kết nối vào máy chủ EC2.*
 
 Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions** và thêm 3 biến bảo mật sau:
 1. `EC2_HOST`: Địa chỉ IP Public của EC2.
@@ -116,12 +158,7 @@ Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions
 
 ![Giao diện trang Settings/Secrets trên GitHub với 3 biến đã được thêm](./image_step/anh_7_github_secrets.png)
 
-### Bước 3.2: Tạo Workflow File
-*Giải thích: File YAML này đóng vai trò là kịch bản (pipeline) chỉ đạo GitHub thực hiện chuỗi 3 công việc (jobs) một cách tuần tự mỗi khi có thay đổi trên nhánh `main`:*
-*- **Build**: Kiểm tra thử việc đóng gói Docker Image để đảm bảo mã nguồn không bị hỏng trước khi đưa lên server thực tế.*
-*- **Deploy**: Tự động sao chép mã nguồn mới sang máy ảo EC2 qua giao thức SCP, sau đó gửi lệnh SSH để yêu cầu Docker Compose khởi động lại hệ thống với phiên bản mới nhất.*
-*- **Show log**: In trạng thái hoạt động của các container ra màn hình giao diện GitHub để người quản trị dễ dàng giám sát.*
-
+**2. Tạo Workflow File**
 Tại máy tính cá nhân, tạo một file tên là `.github/workflows/deploy.yml` trong thư mục dự án:
 
 ```yaml
@@ -202,25 +239,18 @@ jobs:
 
 ![Chụp màn hình code file deploy.yml trên VS Code](./image_step/anh_8_deploy_yml.png)
 
-### Bước 3.3: Kết quả triển khai tự động
-*Giải thích: Bước này đóng vai trò kích hoạt chu trình CI/CD vừa thiết lập. Thông qua tab Actions, người quản trị có thể giám sát toàn bộ quá trình tự động hóa theo thời gian thực (real-time) mà không cần phải đăng nhập trực tiếp vào máy chủ EC2.*
-
+**3. Kết quả triển khai tự động**
 Thực hiện commit file `deploy.yml` và push lên nhánh `main`. 
-
 Mở tab **Actions** trên kho GitHub để kiểm tra. Quá trình sẽ tự động chạy nối tiếp 3 bước (Build, Deploy, Show log). 
 
 ![Giao diện tab Actions báo xanh lá cây "Success" của cả 3 bước workflow](./image_step/anh_9_github_actions_success.png)
 
-Từ bây giờ, mỗi khi có code mới được Push lên nhánh main, ứng dụng sẽ tự động được triển khai lên máy chủ EC2. Quá trình cấu hình CI/CD hoàn tất!
+### Kiểm chứng tính năng CI/CD tự động
 
-## Phần 4: Kiểm chứng tính năng CI/CD tự động
+Sau khi thiết lập thành công, bước tiếp theo là kiểm chứng tính năng tự động hóa bằng cách thực hiện một thay đổi nhỏ trên giao diện.
 
-Sau khi thiết lập thành công, bước tiếp theo là kiểm chứng tính năng tự động hóa bằng cách thực hiện một thay đổi nhỏ trên giao diện Frontend và quan sát kết quả thực tế trên server.
-
-### Bước 4.1: Chỉnh sửa mã nguồn Frontend
-*Giải thích: Thao tác này giả lập quá trình phát triển (development) thực tế. Lập trình viên chỉ cần thay đổi code tại máy cá nhân, mọi việc triển khai còn lại hệ thống CI/CD sẽ tự lo.*
-
-Mở file `frontend/src/App.jsx` trên máy tính cá nhân, tìm đến phần giao diện và sửa đổi một đoạn văn bản (text) hoặc thêm một nút bấm (button) để dễ dàng nhận diện phiên bản mới. Ví dụ:
+**1. Chỉnh sửa mã nguồn Frontend**
+Mở file `frontend/src/App.jsx` trên máy tính cá nhân, tìm đến phần giao diện và sửa đổi một đoạn văn bản:
 
 ```jsx
 // Tìm dòng chứa thẻ <h1> và sửa thành:
@@ -234,8 +264,8 @@ Mở file `frontend/src/App.jsx` trên máy tính cá nhân, tìm đến phần 
 
 ![Chụp màn hình VS Code vị trí vừa sửa file App.jsx](./image_step/anh_10_sua_code_fe.png)
 
-### Bước 4.2: Đẩy code lên GitHub (Push)
-Thực hiện các lệnh Git quen thuộc trên Terminal của máy cá nhân để ghi nhận sự thay đổi và đẩy code lên nhánh `main`:
+**2. Đẩy code lên GitHub (Push)**
+Thực hiện các lệnh Git để ghi nhận sự thay đổi và đẩy code:
 
 ```bash
 git add frontend/src/App.jsx
@@ -244,53 +274,24 @@ git push
 ```
 ![cicd chạy](./image_step/anh_12_cicd.png)
 
-### Bước 4.3: Hưởng thụ thành quả tự động hóa
-Ngay sau khi lệnh Push hoàn tất, hệ thống GitHub Actions sẽ lập tức bắt được tín hiệu "có code mới" và kích hoạt luồng Deploy.
-
-1. Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trình mới đang tự động chạy qua các bước Build và Deploy.
-2. Đợi khoảng 1-2 phút cho đến khi tất cả các bước báo dấu tick xanh lá.
-3. Mở trình duyệt và truy cập lại vào **Public IP** của máy chủ EC2. 
-4. Giao diện mới với dòng chữ vừa sửa sẽ lập tức hiện ra mà bạn không cần phải đăng nhập SSH hay gõ bất kỳ dòng lệnh nào trên server!
+**3. Hưởng thụ thành quả tự động hóa**
+Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trình mới đang tự động chạy. Đợi báo xanh, sau đó mở trình duyệt và truy cập lại vào **Public IP**. Giao diện mới với dòng chữ vừa sửa sẽ lập tức hiện ra!
 
 ![Chụp màn hình trình duyệt với giao diện web đã được cập nhật thành công](./image_step/anh_11_web_update_thanh_cong.png)
 
-Đây chính là giá trị cốt lõi của DevOps và quy trình CI/CD: Giải phóng lập trình viên khỏi các tác vụ thủ công lặp đi lặp lại, giúp họ chỉ cần tập trung hoàn toàn vào việc phát triển tính năng.
+---
 
-## Phần 5: Các câu lệnh thiết yếu khi làm việc với CI/CD
+## Map ngược vào khung theo gạch đầu dòng thứ 3
 
-Trong quá trình phát triển dự án hàng ngày, thao tác với Git là cầu nối trực tiếp để tương tác với hệ thống CI/CD. Dưới đây là danh sách các lệnh "nằm lòng" để bạn tra cứu nhanh:
+Đối chiếu lại luồng `deploy.yml` ở Phần Case Study với khung lý thuyết, ta thấy:
+- **Stage Source/Checkout:** Tương ứng với step `uses: actions/checkout@v4`.
+- **Stage Build:** Tương ứng với step chạy lệnh `docker-compose build`.
+- **Stage Test:** Hiện tại đang bị KHUYẾT (Pipeline nhập môn chưa thiết lập).
+- **Stage Deploy:** Tương ứng với Job Deploy, dùng SCP copy code và SSH để chạy `docker-compose up`.
 
-### 1. Đẩy code và kích hoạt luồng CI/CD
-Đây là bộ ba câu lệnh bạn sẽ dùng nhiều nhất. Ngay sau lệnh cuối cùng, quá trình CI/CD sẽ tự động chạy.
-```bash
-# B1: Gom tất cả các file vừa chỉnh sửa
-git add .
+## Hạn chế của pipeline
 
-# B2: Đóng gói và ghi chú lại nội dung bạn vừa thay đổi
-git commit -m "Mô tả tính năng hoặc lỗi vừa sửa..."
-
-# B3: Đẩy code lên GitHub (GitHub Actions sẽ được kích hoạt ngay lập tức)
-git push
-```
-
-### 2. Đẩy code nhưng BỎ QUA luồng CI/CD (Tiết kiệm tài nguyên)
-Nếu bạn chỉ sửa lỗi chính tả trong file văn bản (như README) và không muốn lãng phí sức mạnh máy chủ để Build/Deploy lại toàn bộ dự án, hãy sử dụng thủ thuật này:
-```bash
-git add .
-# Chèn thêm từ khóa [skip ci] vào đầu câu ghi chú
-git commit -m "[skip ci] Sửa lỗi chính tả file Readme"
-git push
-```
-*Giải thích: Khi GitHub Actions nhìn thấy từ khóa `[skip ci]`, nó sẽ tự động hủy luồng chạy, giúp tiết kiệm phút chạy miễn phí (quota) của bạn trên GitHub.*
-
-### 3. Đồng bộ Code (Pull)
-Nếu dự án có nhiều người cùng làm, hoặc bạn vừa chỉnh sửa file trực tiếp trên giao diện web của GitHub, bạn bắt buộc phải kéo code mới nhất về máy cá nhân trước khi làm việc tiếp:
-```bash
-git pull
-```
-
-### 4. Kiểm tra trạng thái hiện tại
-Khi bạn làm việc quá lâu và quên mất mình đã sửa những file nào, hoặc file nào chưa được `git add`:
-```bash
-git status
-```
+Dù đã tự động hóa, nhưng Case Study trên còn vô số nhược điểm (đây cũng là động lực để học Part 2):
+- **Chậm chạp:** Dùng SCP copy hàng trăm file mã nguồn qua mạng tốn rất nhiều thời gian.
+- **Nặng Server:** Bắt máy chủ EC2 yếu ớt (như `t2.micro`) tự Build code, rất dễ gây treo máy do cạn RAM.
+- **Thiếu kiểm soát đồng thời (Concurrency):** Nếu 2 người cùng push code một lúc, 2 luồng sẽ chạy song song ghi đè lên nhau gây sập dữ liệu.
