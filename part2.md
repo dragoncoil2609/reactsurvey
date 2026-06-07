@@ -88,17 +88,11 @@ Sự kiện này sinh ra nút bấm "Run workflow" trên giao diện web GitHub,
 
 lỗi hay gặp : viết `on: workflow_dispatch` ở nhánh `dev`, push lên, vào tab Actions tìm nút bấm — không thấy. Lý do là giao diện web chỉ quét `main` để vẽ nút, đúng với quy tắc ngoại cảnh ở trên. Nút chỉ xuất hiện sau khi file được merge vào `main`.
 
-**Trước khi merge vào `main`:** không có nút nào.
+![**Trước khi merge vào `main`**: không có nút nào. (Chụp màn hình tab Actions khi file workflow_dispatch chỉ ở nhánh dev)](./image_step/3_1_dispatch_button_missing.png)
 
-![Chụp màn hình tab Actions khi file workflow_dispatch chỉ ở nhánh dev — không có nút "Run workflow" nào hiển thị](./image_step/3_1_dispatch_button_missing.png)
+![**Sau khi merge**: nút xuất hiện ở góc phải. (Chụp màn hình tab Actions sau khi merge vào main)](./image_step/3_2_dispatch_button_appeared.png)
 
-**Sau khi merge:** nút xuất hiện.
-
-![Chụp màn hình tab Actions sau khi merge vào main — nút "Run workflow" đã xuất hiện ở góc phải](./image_step/3_2_dispatch_button_appeared.png)
-
-Điểm đáng chú ý: khi bấm nút, GitHub hỏi muốn lấy code từ nhánh nào. File định nghĩa nút phải ở `main`, nhưng nút đó có thể chạy trên code của bất kỳ nhánh nào.
-
-![Chụp màn hình menu dropdown khi bấm "Run workflow", hiển thị ô chọn nhánh (Use workflow from)](./image_step/3_3_dispatch_branch_selector.png)
+![**Điểm đáng chú ý**: khi bấm nút, GitHub hỏi muốn lấy code từ nhánh nào. File định nghĩa nút phải ở `main`, nhưng nút đó có thể chạy trên code của bất kỳ nhánh nào. (Chụp màn hình menu dropdown khi bấm "Run workflow")](./image_step/3_3_dispatch_branch_selector.png)
 
 ### `workflow_call`
 
