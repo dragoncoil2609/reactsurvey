@@ -1,0 +1,10 @@
+name: Manual Trigger Demo
+
+# Sự kiện này sinh ra nút "Run workflow" trên giao diện GitHub
+on: workflow_dispatch
+
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Nút bấm đã hoạt động!"
