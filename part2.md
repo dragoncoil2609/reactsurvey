@@ -136,7 +136,7 @@ Bài toán thực tế: 50 repo có quy trình deploy giống nhau. Copy paste f
 
 ### `workflow_run`
 
-Sự kiện này kích hoạt một workflow khi một workflow khác vừa chạy xong.
+Sự kiện này kích hoạt một workflow tự động ngay khi một workflow khác vừa chạy xong.
 
 **Code minh họa:**
 ```yaml
@@ -149,7 +149,10 @@ on:
       - main
 ```
 
-Dùng để tách biệt trách nhiệm: `ci.yml` lo kiểm thử, `deploy.yml` lo triển khai, `workflow_run` nối hai bên lại. Deploy chỉ chạy khi test xanh.
+**Bản chất và quy tắc hoạt động:**
+- **Giải quyết bài toán gì?** Nếu dùng `on: push` cho cả file Test và file Deploy, hai file này sẽ chạy đua song song (như ở phần 1). Nguy cơ rất lớn là Deploy chạy nhanh hơn và mang cả code lỗi lên server trong khi file Test chưa kịp báo đỏ. `workflow_run` sinh ra để biến chúng thành "băng chuyền": Test xong xuôi mới được Deploy.
+- **Dùng khi nào?** Khi bạn muốn chia nhỏ một pipeline khổng lồ thành nhiều file độc lập (ví dụ `ci.yml` chỉ lo build/test, `deploy.yml` chỉ lo gọi EC2), hoặc khi bạn muốn một workflow ở repo A kích hoạt một workflow ở repo B.
+- **Yêu cầu về nhánh:** Tương tự `workflow_dispatch`, file chứa sự kiện này (file `deploy.yml`) **bắt buộc phải nằm ở nhánh `main`** thì GitHub Actions mới chịu lắng nghe. Đồng thời, nên luôn kẹp thêm điều kiện `if: ${{ github.event.workflow_run.conclusion == 'success' }}` vào các Jobs để đảm bảo file trước chạy thành công (xanh) thì luồng sau mới thực thi.
 
 ![**Nối tiếp hoàn hảo**: workflow Deploy tự động kích hoạt ngay sau khi workflow CI hoàn thành xuất sắc.](./image_step/3_5_workflow_run_chain.png)
 
