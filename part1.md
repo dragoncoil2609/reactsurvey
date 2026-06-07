@@ -42,6 +42,9 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đo
 ## Test trong CI
 
 Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn bắt buộc để đảm bảo mã nguồn trên nhánh chính luôn ổn định (Passed).
+- **Unit Test:** Kiểm tra từng hàm nhỏ độc lập xem logic cốt lõi có đúng không.
+- **Integration Test:** Đảm bảo các module khi ghép lại (hoặc khi gọi Database) vẫn giao tiếp chuẩn xác.
+- **E2E Test:** Giả lập thao tác thực tế trên giao diện để chạy xuyên suốt một luồng nghiệp vụ.
 
 ## Deploy strategies
 
