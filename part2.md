@@ -162,7 +162,9 @@ on:
 - **Dùng khi nào?** Khi bạn muốn chia nhỏ một pipeline khổng lồ thành nhiều file độc lập (ví dụ `ci.yml` chỉ lo build/test, `deploy.yml` chỉ lo gọi EC2), hoặc khi bạn muốn một workflow ở repo A kích hoạt một workflow ở repo B.
 - **Yêu cầu về nhánh:** Tương tự `workflow_dispatch`, file chứa sự kiện này (file `deploy.yml`) **bắt buộc phải nằm ở nhánh `main`** thì GitHub Actions mới chịu lắng nghe. Đồng thời, nên luôn kẹp thêm điều kiện `if: ${{ github.event.workflow_run.conclusion == 'success' }}` vào các Jobs để đảm bảo file trước chạy thành công (xanh) thì luồng sau mới thực thi.
 
-![**Nối tiếp hoàn hảo**: workflow Deploy tự động kích hoạt ngay sau khi workflow CI hoàn thành xuất sắc.](./image_step/3_5_workflow_run_chain.png)
+![**Sửa code file deploy.yml**: Chuyển sự kiện thành `workflow_run` và kẹp thêm điều kiện `if: success` vào job để đảm bảo luồng CI phải báo xanh (Success) thì luồng Deploy mới được phép chạy.](./image_step/3_5_workflow_run_code.png)
+
+![**Nối tiếp hoàn hảo**: workflow Deploy tự động kích hoạt ngay sau khi workflow CI hoàn thành xuất sắc.](./image_step/3_6_workflow_run_chain.png)
 
 ---
 
