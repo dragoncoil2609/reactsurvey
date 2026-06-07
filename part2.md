@@ -169,3 +169,49 @@ on:
 ---
 
 Tóm lại: `push` và `pull_request` phù hợp với dự án đơn lẻ. Họ `workflow_*` dùng khi cần điều phối CI/CD qua nhiều repo hoặc cần kiểm soát thủ công ở từng bước.
+
+## 4. Bonus: Tối ưu hoá Tốc độ Deploy (Chuyển sang dùng Docker Hub)
+
+Trong quá trình thực hành ở các phần trước, nếu tinh ý bạn sẽ thấy bước **Copy source code lên EC2** (dùng `appleboy/scp-action`) chạy rất chậm.
+
+**Vấn đề của "cicd basic":**
+Việc dùng `source: "./*"` sẽ gói hàng nghìn file mã nguồn nhỏ lẻ, đẩy qua mạng bằng giao thức SSH, rồi giải nén trên EC2. Sau đó EC2 lại phải còng lưng tự build đống code đó thành Docker Image. Cách này vừa chậm mạng, vừa làm nặng server Production, lại có nguy cơ lộ toàn bộ mã nguồn.
+
+![Dòng lệnh `source: "./*"` bắt SCP phải sao chép toàn bộ mã nguồn.](./image_step/4_1_slow_scp.png)
+
+**Giải pháp "Cách Nhanh Hơn" (Chuẩn DevOps):**
+Trong thực tế, **KHÔNG AI copy toàn bộ source code sang server production cả**. Kiến trúc DevOps chuẩn sẽ đi theo luồng sau:
+1. **GitHub Actions làm cật lực:** Nó tự build mã nguồn thành Docker Image ngay trên máy chủ siêu tốc của GitHub.
+2. **Kho trung chuyển:** GitHub Actions đẩy Image vừa build xong lên **Docker Hub** (hoặc AWS ECR).
+3. **Copy siêu tốc:** SCP lúc này CHỈ COPY DUY NHẤT 1 FILE là `docker-compose.yml` sang EC2 (mất chưa tới 1 giây).
+4. **EC2 nhàn hạ:** EC2 chỉ việc chạy lệnh `docker-compose pull` tải Image về và `docker-compose up -d` để khởi động ứng dụng.
+
+### Các Bước Triển Khai Thực Tế
+
+**Bước 1: Khai báo Secrets trên GitHub**
+Truy cập **Settings > Secrets and variables > Actions** của Repository, thêm 2 biến bắt buộc:
+- `DOCKER_USERNAME`: Tên đăng nhập Docker Hub của bạn.
+- `DOCKER_PASSWORD`: Mật khẩu (hoặc Access Token) Docker Hub.
+
+![**Thêm Secrets**: Cấu hình tài khoản Docker Hub lên GitHub.](./image_step/4_2_github_secrets.png)
+
+**Bước 2: Cập nhật file `docker-compose.yml`**
+Bổ sung thêm thuộc tính `image` vào các service (vẫn giữ lại `build` để hỗ trợ chạy ở local):
+```yaml
+services:
+  backend:
+    build: ./backend
+    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_backend:latest
+  frontend:
+    build: ./frontend
+    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_frontend:latest
+```
+
+**Bước 3: Viết lại luồng chạy trong `deploy.yml`**
+Cấu trúc lại luồng Deploy thành 2 Job riêng biệt:
+1. **Job 1 (Build & Push):** Đăng nhập Docker Hub bằng `docker/login-action`, sau đó dùng `docker/build-push-action` để đóng gói và đẩy Image lên kho lưu trữ.
+2. **Job 2 (Deploy Fast):** SCP đúng 1 file `docker-compose.yml` sang EC2. Tiếp theo dùng SSH truyền biến môi trường `$DOCKER_USERNAME` vào server và gõ lệnh `docker-compose pull` để kéo Image, rồi `docker-compose up -d` để chạy.
+
+![**Pipeline Chuẩn DevOps**: Luồng chạy siêu tốc với 2 Job riêng biệt rõ ràng.](./image_step/4_4_deploy_fast.png)
+
+*Trong mã nguồn dự án này, mình đã cập nhật sẵn toàn bộ code của cấu trúc "Siêu Tốc" này. Bạn có thể mở trực tiếp file `.github/workflows/deploy.yml` và `docker-compose.yml` để đối chiếu và tham khảo cú pháp chi tiết nhé!*

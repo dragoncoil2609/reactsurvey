@@ -16,55 +16,118 @@ on:
       - main
 
 jobs:
-  # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
-  build:
+# ==========================================
+# CÁCH 1: CƠ BẢN (COPY TOÀN BỘ SOURCE CODE SANG EC2) - ĐÃ ĐƯỢC COMMENT LẠI
+# ==========================================
+#   build:
+#     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+#     name: 1. Build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+# 
+#       - name: Kiểm tra Build Frontend & Backend
+#         run: |
+#           echo "Thử build Docker Image để đảm bảo code không lỗi trước khi deploy..."
+#           docker compose build
+# 
+#   deploy:
+#     name: 2. Deploy
+#     runs-on: ubuntu-latest
+#     needs: build
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+# 
+#       - name: Copy source code lên EC2
+#         uses: appleboy/scp-action@v0.1.7
+#         with:
+#           host: ${{ secrets.EC2_HOST }}
+#           username: ${{ secrets.EC2_USERNAME }}
+#           key: ${{ secrets.EC2_SSH_KEY }}
+#           source: "./*"
+#           target: "~/app"
+# 
+#       - name: Triển khai bằng Docker Compose
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.EC2_HOST }}
+#           username: ${{ secrets.EC2_USERNAME }}
+#           key: ${{ secrets.EC2_SSH_KEY }}
+#           script: |
+#             cd ~/app
+#             docker-compose down
+#             docker-compose up -d --build
+
+# ==========================================
+# CÁCH 2: NHANH HƠN (BUILD TRÊN GITHUB ACTIONS -> PUSH LÊN DOCKER HUB -> EC2 CHỈ KÉO IMAGE VỀ CHẠY)
+# ==========================================
+  build_and_push:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    name: 1. Build
+    name: 1. Build & Push Image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Kiểm tra Build Frontend & Backend
-        run: |
-          echo "Thử build Docker Image để đảm bảo code không lỗi trước khi deploy..."
-          docker compose build
+      - name: Đăng nhập Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Build và Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/crud_backend:latest
+          
+      - name: Build và Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/crud_frontend:latest
 
-  # Bước 2: Bắn code sang EC2 và yêu cầu Docker khởi chạy
-  deploy:
-    name: 2. Deploy
+  deploy_fast:
+    name: 2. Deploy Fast
     runs-on: ubuntu-latest
-    needs: build
+    needs: build_and_push
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy source code lên EC2
+      - name: Copy duy nhất file docker-compose.yml lên EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "./*"
+          source: "docker-compose.yml"
           target: "~/app"
 
-      - name: Triển khai bằng Docker Compose
+      - name: Lệnh kéo Image và chạy trên EC2
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DOCKER_USERNAME
           script: |
             cd ~/app
-            # Dừng các container cũ và khởi động lại với code mới (chạy ngầm)
+            export DOCKER_USERNAME=$DOCKER_USERNAME
+            docker-compose pull
             docker-compose down
-            docker-compose up -d --build
+            docker-compose up -d
 
-  # Bước 3: Kiểm tra trạng thái các Container
   show_log:
     name: 3. Test / Show log
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: deploy_fast
     steps:
       - name: In log trạng thái
         uses: appleboy/ssh-action@v1.0.3
