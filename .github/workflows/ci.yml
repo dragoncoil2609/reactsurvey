@@ -1,0 +1,30 @@
+name: CI - Build & Test
+
+# CI chạy trên TẤT CẢ nhánh khi có push hoặc pull request
+# Mục đích: phát hiện lỗi sớm ngay từ feature branch, trước khi merge vào main
+on:
+  push:
+    branches:
+      - '**'        # Tất cả nhánh
+  pull_request:
+    branches:
+      - main        # PR nhắm vào main
+
+jobs:
+  build:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Kiểm tra Build Docker Image
+        run: |
+          echo "=== Đang build Docker Image để kiểm tra code không lỗi ==="
+          docker compose build
+          echo "=== Build thành công! Code sẵn sàng để merge ==="
+
+  # CD (Deploy) KHÔNG có ở đây.
+  # Chỉ deploy khi code đã được merge vào main — xem file deploy.yml

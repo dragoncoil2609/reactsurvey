@@ -9,8 +9,7 @@ concurrency:
 on:
   push:
     branches:
-      - main
-      - dev
+      - main        # CD chỉ chạy khi merge vào main
 
 jobs:
   # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
