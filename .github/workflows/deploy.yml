@@ -1,9 +1,16 @@
 name: CI/CD Pipeline Docker
 
+# Concurrency: hủy luồng cũ nếu có luồng mới cùng nhóm
+# Lưu ý: dùng github.ref → mỗi nhánh là 1 nhóm riêng
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
       - main
+      - dev
 
 jobs:
   # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
