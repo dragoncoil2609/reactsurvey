@@ -92,7 +92,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/crud_frontend:latest
 
   deploy_fast:
-    name: 2. Deploy Fast
+    name: 2. Deploy
     runs-on: ubuntu-latest
     needs: build_and_push
     steps:

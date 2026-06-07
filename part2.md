@@ -212,6 +212,6 @@ Cấu trúc lại luồng Deploy thành 2 Job riêng biệt:
 1. **Job 1 (Build & Push):** Đăng nhập Docker Hub bằng `docker/login-action`, sau đó dùng `docker/build-push-action` để đóng gói và đẩy Image lên kho lưu trữ.
 2. **Job 2 (Deploy Fast):** SCP đúng 1 file `docker-compose.yml` sang EC2. Tiếp theo dùng SSH truyền biến môi trường `$DOCKER_USERNAME` vào server và gõ lệnh `docker-compose pull` để kéo Image, rồi `docker-compose up -d` để chạy.
 
-![**Pipeline Chuẩn DevOps**: Luồng chạy siêu tốc với 2 Job riêng biệt rõ ràng.](./image_step/4_4_deploy_fast.png)
+![Luồng chạy siêu tốc với 2 Job riêng biệt rõ ràng.](./image_step/4_4_deploy_fast.png)
 
 *Trong mã nguồn dự án này, mình đã cập nhật sẵn toàn bộ code của cấu trúc "Siêu Tốc" này. Bạn có thể mở trực tiếp file `.github/workflows/deploy.yml` và `docker-compose.yml` để đối chiếu và tham khảo cú pháp chi tiết nhé!*
