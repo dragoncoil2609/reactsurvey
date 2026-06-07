@@ -130,7 +130,10 @@ on:
         type: string
 ```
 
-Bài toán thực tế: 50 repo có quy trình deploy giống nhau. Copy paste file `deploy.yml` sang 50 chỗ thì mỗi lần sửa phải cập nhật 50 nơi. Với `workflow_call`, chỉ cần một file trung tâm; 50 repo còn lại gọi vào bằng một dòng trỏ link. Sửa một chỗ, 50 repo áp dụng theo.
+**Bản chất và quy tắc hoạt động:**
+- **Giải quyết bài toán gì?** Bệnh "Copy-Paste". Nếu bạn có 50 repo với quy trình deploy y hệt nhau, việc copy file `deploy.yml` sang 50 chỗ sẽ tạo ra cơn ác mộng bảo trì. Khi có thay đổi, bạn phải sửa thủ công 50 lần. `workflow_call` biến 1 file YAML trung tâm thành một "hàm" dùng chung: chỉ cần sửa 1 chỗ, 50 repo còn lại tự động được cập nhật.
+- **Dùng khi nào?** Khi dự án lớn lên thành mô hình microservices, hoặc công ty có nhiều dự án chạy chung một tiêu chuẩn CI/CD (như chung cách build Docker, chung cách scan lỗi).
+- **Yêu cầu về nhánh:** File gốc dùng để gọi (caller workflow) vẫn tuân theo quy tắc phải nằm ở nhánh `main`. Còn bản thân cái file thư viện trung tâm (chứa `on: workflow_call`) thì khi gọi, bạn bắt buộc phải trỏ chính xác nó đang nằm ở nhánh/tag nào (VD: `uses: org/repo/.github/workflows/template.yml@main`).
 
 ![Sơ đồ minh họa: 1 file workflow_call ở repo trung tâm được nhiều repo khác nhau gọi lại](./image_step/3_4_workflow_call_diagram.png)
 
