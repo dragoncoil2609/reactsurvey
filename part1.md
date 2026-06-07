@@ -295,7 +295,9 @@ Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trìn
 
 ## Hạn chế của pipeline
 
-Mặc dù đã tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại một số hạn chế (sẽ được khắc phục ở Part 2):
+Mặc dù đã tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại 5 "lỗ hổng" chí mạng (sẽ được khắc phục triệt để ở Part 2):
+- **Gây gián đoạn dịch vụ (Downtime):** Mỗi lần Deploy, lệnh `docker compose down` sẽ làm sập server hoàn toàn cho đến khi quá trình build mới hoàn tất. Trải nghiệm người dùng sẽ bị gián đoạn.
+- **Không có cơ chế quay lui (Rollback):** Code mới được build và ghi đè thẳng lên bản cũ. Nếu bản mới chứa bug nghiêm trọng làm sập web, hệ thống không có cách nào tự động quay về phiên bản ổn định trước đó.
 - **Hiệu suất truyền tải thấp:** Việc sử dụng giao thức SCP để sao chép hàng trăm tệp tin mã nguồn nhỏ lẻ qua mạng gây lãng phí rất nhiều thời gian.
 - **Tiêu hao tài nguyên Server:** Yêu cầu máy chủ EC2 cấu hình thấp (như `t2.micro`) tự thực hiện Build mã nguồn rất dễ dẫn đến tình trạng treo hệ thống do tràn bộ nhớ (Out of Memory).
 - **Thiếu kiểm soát đồng thời (Concurrency):** Nếu hai lập trình viên cùng push mã nguồn cùng thời điểm, hai tiến trình triển khai sẽ chạy song song và gây xung đột dữ liệu.
