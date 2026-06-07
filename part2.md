@@ -90,7 +90,7 @@ Sự kiện này sinh ra nút bấm "Run workflow" trên giao diện web GitHub,
 
 Lý do là giao diện web của GitHub chỉ quét nhánh `main` để vẽ nút bấm, hoàn toàn tuân theo quy tắc "sự kiện ngoại cảnh" đã nói ở trên.
 
-**Bước 1: Trạng thái tàng hình**
+**Bước 1: Nút k chạy**
 Nếu bạn chỉ push file định nghĩa nút bấm lên nhánh `dev` mà chưa merge vào `main`, nút bấm sẽ không hiện ra. Nhìn vào cột menu bên trái, workflow này hoàn toàn mất tích.
 
 ![Trước khi merge vào main: không có nút nào.](./image_step/3_1_dispatch_button_missing.png)
