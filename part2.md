@@ -1,217 +1,196 @@
-# CI/CD Phần 2: Những điểm dễ sai khi dùng GitHub Actions
+# Hướng dẫn Toàn tập: Tối ưu Hóa và Bảo mật CI/CD (GitHub Actions Nâng Cao)
 
-Phần 1 đã dựng được luồng CI/CD cơ bản. Phần này đi vào ba chỗ thường gây lỗi thầm lặng: cơ chế chống đụng độ, quy tắc GitHub chọn nhánh để đọc file YAML, và họ sự kiện `workflow_*`.
+Phần 1 đã dựng thành công một luồng CI/CD cơ bản. Tuy nhiên, luồng cơ bản đó mang trong mình những điểm yếu chí mạng: sập server do chạy đè, nguy cơ lộ khóa bảo mật, và tốc độ rùa bò do tải nặng. Phần 2 này sẽ "phẫu thuật" từng điểm yếu một bằng các chiến lược DevOps nâng cao.
 
----
+## Concurrency control
 
-## 1. Concurrency Control
+Khi nhiều lập trình viên cùng đẩy mã nguồn lên nhánh chính cùng một thời điểm, các tiến trình triển khai sẽ được kích hoạt và chạy song song (parallel). Điều này dẫn đến tình trạng hai tiến trình cùng cố gắng ghi đè lên máy chủ, gây xung đột cổng, khóa database (lock), và sụp đổ hệ thống. Khái niệm `concurrency` (Kiểm soát đồng thời) sinh ra để giải quyết bài toán này.
 
-Mặc định, mỗi lần push kích hoạt một luồng Actions chạy độc lập. Nếu hai developer push cách nhau 10 giây, Actions tạo hai máy ảo song song, cùng SSH vào EC2 và chạy `docker compose up`. Kết quả là xung đột cổng, database bị lock, hoặc sập web.
+Hệ thống cung cấp cho chúng bản thân hai cơ chế để kiểm soát: **Queue (Xếp hàng)** và **Cancel (Hủy diệt)**. Bằng cách gom các tiến trình lại thông qua thuộc tính `group`, chúng ta ép chúng không được phép chạy song song nữa.
 
-Thêm `concurrency` vào file `deploy.yml` để Actions hủy luồng cũ khi có luồng mới hơn cùng nhóm:
+**1. Cơ chế Queue (Hàng đợi 1-chỗ-trống)**
+Nếu chỉ định nghĩa `group` mà không cấu hình gì thêm, GitHub Actions sẽ mặc định áp dụng luật xếp hàng. Tuy nhiên, hàng đợi (Queue) của nó vô cùng khắt khe: **Chỉ có đúng 1 chỗ trống duy nhất ở trạng thái Pending**.
+- Nếu Tiến trình 1 đang chạy, Tiến trình 2 đi sau sẽ ngoan ngoãn chui vào Queue nằm chờ.
+- Nhưng nếu Tiến trình 3 đột ngột xuất hiện, nó sẽ thẳng tay "đá văng" Tiến trình 2 ra khỏi Queue để cướp chỗ. Tiến trình 2 bị hủy (Cancelled) hoàn toàn. Khi Tiến trình 1 chạy xong, Tiến trình 3 mới nhất sẽ được nối bước.
 
-```yaml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-```
+Cơ chế này sinh ra để tối ưu hóa thời gian: Khi Deploy, chúng ta luôn chỉ cần đưa bản code mới nhất (Tiến trình 3) lên server, hoàn toàn không có lý do gì phải tốn tài nguyên chạy deploy một bản code đã cũ (Tiến trình 2) cả.
 
-Tuy nhiên, cấu hình trên chỉ bảo vệ trong phạm vi **cùng nhánh**. `${{ github.ref }}` là tên nhánh, nên push từ `main` và push từ `dev` vào cùng lúc tạo ra hai concurrency group khác nhau — vẫn chạy song song, vẫn đụng nhau trên cùng một server EC2.
+**2. Cờ Cancel-in-progress (Hủy tức thì)**
+Nếu không muốn Tiến trình 3 phải chờ đợi Tiến trình 1 chạy xong, có thể kẹp thêm cờ `cancel-in-progress: true`. Cờ này có tính sát thương cao: Ngay khi Tiến trình 3 xuất hiện, nó lập tức "giết" Tiến trình 1 giữa chừng để giành trọn tài nguyên chạy ngay lập tức.
 
-Nếu nhiều nhánh cùng deploy lên một server, bỏ `${{ github.ref }}` ra:
+*Cảnh báo chí mạng:* Tuyệt đối cẩn trọng khi dùng `cancel-in-progress: true` ở chính giai đoạn **Deploy**. Nếu Tiến trình 1 đang copy dở dang tệp tin lên server mà bị "giết" giữa chừng, máy chủ sẽ rơi vào trạng thái lơ lửng, hỏng hóc (corrupted) do nhận được mã nguồn chắp vá. Với những luồng Deploy copy trực tiếp lên EC2, an toàn nhất là chỉ nên dùng cơ chế Queue (đợi nhau) thay vì Cancel (giết nhau).
 
-```yaml
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
-```
+**(Thực hành) Mẹo nhỏ cấu hình Group:**
+Rất nhiều tài liệu trên mạng dạy cách viết `group: ${{ github.workflow }}-${{ github.ref }}`. Cách này có vẻ đúng, nhưng thực chất nó chỉ ngăn đụng độ trong **cùng một nhánh**. Nếu nhánh `main` và nhánh `dev` cùng deploy lên chung một server EC2, chúng sẽ sinh ra hai nhóm riêng biệt và vẫn chạy song song đè lên nhau.
 
-Khi đó mọi luồng của cùng một workflow đều vào chung một nhóm, bất kể nhánh nào.
+![Cấu hình "có vẻ đúng" nhưng vẫn chứa lỗ hổng đụng độ chéo nhánh](./image_step/1_0_yml_before_fix.png)
+![Hai luồng từ main và dev vẫn chạy song song gây nguy cơ sập EC2](./image_step/1_1_two_runs_parallel.png)
 
-**Cấu hình ban đầu — chỉ bảo vệ trong cùng nhánh:**
+Để khắc phục triệt để, chỉ cần xóa bỏ biến `${{ github.ref }}`. Khi đó, mọi luồng dù xuất phát từ bất kỳ nhánh nào cũng sẽ phải xếp hàng chung vào một nhóm duy nhất:
 
-Đây là cấu hình phổ biến nhất trên các tutorial. Nhìn qua có vẻ đúng, nhưng chứa một lỗ hổng ẩn.
+![Cấu hình chuẩn: group chỉ chứa tên workflow](./image_step/1_2_yml_after_fix.png)
+![Chỉ luồng mới nhất được chạy, luồng cũ lập tức bị đánh dấu Cancelled](./image_step/1_3_concurrency_cancel.png)
 
-![File deploy.yml với concurrency dùng github.ref — cấu hình "có vẻ đúng" mà hầu hết tutorial dạy](./image_step/1_0_yml_before_fix.png)
+## Quy tắc nhánh đọc YAML
 
-**Kiểm chứng:**
+Ở các hệ thống cơ bản, pipeline thường chỉ lắng nghe sự kiện `push` hoặc `pull_request`. Nhưng thực tế, hệ sinh thái kích hoạt (trigger) của GitHub Actions đồ sộ hơn rất nhiều:
+- **`schedule`:** Hẹn giờ chạy luồng theo cú pháp cron (ví dụ: quét bảo mật lúc 2h sáng).
+- **`check_run` / `check_suite`:** Lắng nghe phản hồi từ các hệ thống đánh giá chất lượng mã nguồn (như SonarQube).
+- **`branch_protection_rule`:** Chạy khi có người thay đổi luật bảo vệ nhánh.
+- **`delete` / `discussion`:** Chạy tiến trình dọn dẹp khi có nhánh bị xóa, hoặc phát thông báo khi có bình luận mới.
 
-Để tái hiện, chúng ta thêm cả nhánh `dev` vào danh sách trigger, rồi push lên `main` và `dev` gần như cùng lúc. Hai push tạo ra hai concurrency group khác nhau — `pipeline-refs/heads/main` và `pipeline-refs/heads/dev` — và GitHub chạy song song cả hai mà không hủy cái nào.
+*Quy tắc ngầm:* Sự kiện đẩy code (`push`) sẽ luôn đọc file YAML ở ngay nhánh vừa đẩy lên. Nhưng đối với các sự kiện "ngoại cảnh" (không gắn liền với một đoạn code cụ thể như `schedule`, `discussion`...), GitHub chỉ quét tìm file YAML ở **nhánh mặc định (`main`)**. 
 
-![Tab Actions hiển thị 2 luồng đang chạy song song từ cả main và dev — concurrency github.ref không bảo vệ được cross-branch](./image_step/1_1_two_runs_parallel.png)
-
-Nhìn vào ảnh: luồng từ `main` và luồng từ `dev` cùng trạng thái *In progress* / *Pending* một lúc. Tại thời điểm đó, cả hai đều đang SSH vào cùng một server EC2 và chạy `docker compose up` — đây chính là lúc xung đột cổng và database lock có thể xảy ra.
-
-**Giải pháp — bỏ `github.ref` khỏi tên nhóm:**
-
-Thay đổi duy nhất là bỏ `-${{ github.ref }}` ra khỏi `group`. Khi đó tất cả luồng của cùng workflow — dù từ nhánh nào — đều chung một nhóm, luồng cũ hơn bị hủy ngay khi luồng mới vào hàng.
-
-![File deploy.yml sau khi sửa — group chỉ còn github.workflow, không còn github.ref](./image_step/1_2_yml_after_fix.png)
-
-Sau khi push lại và lặp lại cùng thao tác, kết quả trên tab Actions thay đổi hoàn toàn: luồng cũ bị đánh dấu *Cancelled* ngay lập tức, chỉ luồng mới nhất được phép tiếp tục.
-
-![Tab Actions sau khi sửa — luồng cũ bị Cancelled, chỉ còn 1 luồng mới đang chạy](./image_step/1_3_concurrency_cancel.png)
-
----
-
-## 2. GitHub chọn nhánh nào để đọc file YAML?
-
-Quan niệm phổ biến: file YAML ở nhánh nào thì GitHub đọc nhánh đó. Đúng, nhưng chỉ với một nhóm sự kiện nhất định.
-
-GitHub Actions chạy theo sự kiện. Khi sự kiện xảy ra, GitHub cần xác định: *sự kiện này thuộc về nhánh nào, để biết đọc file YAML ở đâu?*
-
-**Sự kiện từ code** (`push`, `pull_request`): GitHub biết rõ ngữ cảnh — push vào nhánh `dev` thì đọc file YAML ở `dev`. Đúng như kỳ vọng.
-
-![Chụp màn hình tab Actions hiển thị tên nhánh "dev" là nhánh đã kích hoạt luồng CI/CD](./image_step/2_1_push_on_dev_branch.png)
-
-**Sự kiện từ ngoại cảnh** (`schedule`, `issue_comment`, v.v.): Thời gian hay một bình luận vào Issue không gắn với nhánh nào. GitHub không thể mò từng nhánh để tìm cấu hình liên quan — với repo có hàng trăm nhánh, đó là bài toán không giải được. Cách GitHub xử lý: chỉ đọc file YAML ở **nhánh mặc định** (`main`). File ở nhánh khác không được đọc, không phát sinh lỗi, chỉ đơn giản là bị bỏ qua.
-
-Ví dụ thường gặp: tạo nhánh `test-cron`, viết file hẹn giờ chạy mỗi phút, push lên. Đợi vài phút không có gì xảy ra.
-
-![Tab Actions không hiển thị luồng chạy nào của Cron khi file chỉ nằm ở nhánh phụ](./image_step/2_2_cron_not_running.png)
-
-Để lịch có hiệu lực, file đó phải được merge vào `main`.
-
-![Sau khi merge vào main, luồng Cron bắt đầu chạy tự động mỗi phút](./image_step/2_3_cron_running_after_merge.png)
-
-> **Quy tắc:** sự kiện từ code đọc YAML ở nhánh của code đó; sự kiện từ ngoại cảnh đọc YAML ở `main`.
-
----
-
-## 3. Họ `workflow_*`
-
-Ba sự kiện `workflow_dispatch`, `workflow_call`, `workflow_run` đều thuộc loại ngoại cảnh. Áp dụng quy tắc ở Phần 2: file YAML chứa chúng phải nằm trên nhánh `main` thì GitHub mới nhận diện và kích hoạt được.
-
-### `workflow_dispatch`
-
-Sự kiện này sinh ra nút bấm "Run workflow" trên giao diện web GitHub, cho phép kích hoạt CI/CD thủ công bất cứ lúc nào mà không cần push code.
-
-**Code minh họa:**
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      môi_trường:
-        description: 'Môi trường deploy (staging/prod)'
-        required: true
-        default: 'staging'
-```
-
-**Bản chất và quy tắc hoạt động:**
-- **Giải quyết bài toán gì?** Không phải lúc nào chúng ta cũng muốn tự động hóa 100%. Có những thao tác cực kỳ nhạy cảm (như deploy lên Production, dọn dẹp server, rollback) cần sự kiểm soát thủ công của con người. `workflow_dispatch` sinh ra để biến Actions thành chiếc "công tắc" bấm tay. Nó còn cho phép truyền thêm tham số đầu vào trực tiếp ngay trên giao diện web.
-- **Dùng khi nào?** Bất cứ khi nào bạn cần chạy một tác vụ DevOps một cách chủ động theo ý muốn, không phụ thuộc vào việc lập trình viên có push code hay không.
-- **Yêu cầu về nhánh:** Giống các thành viên trong họ `workflow_*`, file YAML chứa công tắc này **bắt buộc phải nằm ở nhánh `main`** để giao diện GitHub có thể nhận diện và vẽ ra nút bấm cho bạn.
-
-**Lỗi hay gặp:** viết `on: workflow_dispatch` vào một file ở nhánh `dev`, push lên, rồi vào tab Actions tìm nút bấm — nhưng tìm mãi không thấy. 
-
-Lý do là giao diện web của GitHub chỉ quét nhánh `main` để vẽ nút bấm, hoàn toàn tuân theo quy tắc "sự kiện ngoại cảnh" đã nói ở trên.
-
-**Bước 1: Nút k chạy**
-Nếu bạn chỉ push file định nghĩa nút bấm lên nhánh `dev` mà chưa merge vào `main`, nút bấm sẽ không hiện ra. Nhìn vào cột menu bên trái, workflow này hoàn toàn mất tích.
-
-![Trước khi merge vào main: không có nút nào.](./image_step/3_1_dispatch_button_missing.png)
-
-**Bước 2: Kích hoạt nút bấm**
-Để nút bấm hiện ra, bắt buộc phải merge file đó vào nhánh `main`. Ngay sau khi merge, giao diện sẽ lập tức cập nhật và nút "Run workflow" sẽ xuất hiện ở góc phải.
-
-![Sau khi merge: nút xuất hiện ở góc phải.](./image_step/3_2_dispatch_button_appeared.png)
-
-**Bước 3: Sự linh hoạt của việc chọn nhánh**
-Điểm thú vị nhất của `workflow_dispatch` nằm ở đây: Tuy file định nghĩa nút bấm bắt buộc phải "ký gửi" ở `main`, nhưng khi chạy, GitHub cho phép bạn **chọn lấy code từ bất kỳ nhánh nào**.
-
-![Điểm đáng chú ý: ô chọn nhánh (Use workflow from) cho phép chạy trên nhánh bất kỳ.](./image_step/3_2_dispatch_button_appeared.png)
-
-### `workflow_call`
-
-Sự kiện này biến một file YAML thành thư viện tái sử dụng — file YAML khác ở bất kỳ repo nào trong tổ chức đều có thể gọi vào.
-
-**Code minh họa:**
-```yaml
-on:
-  workflow_call:
-    inputs:
-      tên_dự_án:
-        required: true
-        type: string
-```
-
-**Bản chất và quy tắc hoạt động:**
-- **Giải quyết bài toán gì?** Bệnh "Copy-Paste". Nếu bạn có 50 repo với quy trình deploy y hệt nhau, việc copy file `deploy.yml` sang 50 chỗ sẽ tạo ra cơn ác mộng bảo trì. Khi có thay đổi, bạn phải sửa thủ công 50 lần. `workflow_call` biến 1 file YAML trung tâm thành một "hàm" dùng chung: chỉ cần sửa 1 chỗ, 50 repo còn lại tự động được cập nhật.
-- **Dùng khi nào?** Khi dự án lớn lên thành mô hình microservices, hoặc công ty có nhiều dự án chạy chung một tiêu chuẩn CI/CD (như chung cách build Docker, chung cách scan lỗi).
-- **Yêu cầu về nhánh:** File gốc dùng để gọi (caller workflow) vẫn tuân theo quy tắc phải nằm ở nhánh `main`. Còn bản thân cái file thư viện trung tâm (chứa `on: workflow_call`) thì khi gọi, bạn bắt buộc phải trỏ chính xác nó đang nằm ở nhánh/tag nào (VD: `uses: org/repo/.github/workflows/template.yml@main`).
-
-![Sơ đồ minh họa: 1 file workflow_call ở repo trung tâm được nhiều repo khác nhau gọi lại](./image_step/3_4_workflow_call_diagram.png)
-
-### `workflow_run`
-
-Sự kiện này kích hoạt một workflow tự động ngay khi một workflow khác vừa chạy xong.
-
-**Code minh họa:**
-```yaml
-on:
-  workflow_run:
-    workflows: ["Tên của file CI cần đợi"]
-    types:
-      - completed
-    branches:
-      - main
-```
-
-**Bản chất và quy tắc hoạt động:**
-- **Giải quyết bài toán gì?** Nếu dùng `on: push` cho cả file Test và file Deploy, hai file này sẽ chạy đua song song (như ở phần 1). Nguy cơ rất lớn là Deploy chạy nhanh hơn và mang cả code lỗi lên server trong khi file Test chưa kịp báo đỏ. `workflow_run` sinh ra để biến chúng thành "băng chuyền": Test xong xuôi mới được Deploy.
-- **Dùng khi nào?** Khi bạn muốn chia nhỏ một pipeline khổng lồ thành nhiều file độc lập (ví dụ `ci.yml` chỉ lo build/test, `deploy.yml` chỉ lo gọi EC2), hoặc khi bạn muốn một workflow ở repo A kích hoạt một workflow ở repo B.
-- **Yêu cầu về nhánh:** Tương tự `workflow_dispatch`, file chứa sự kiện này (file `deploy.yml`) **bắt buộc phải nằm ở nhánh `main`** thì GitHub Actions mới chịu lắng nghe. Đồng thời, nên luôn kẹp thêm điều kiện `if: ${{ github.event.workflow_run.conclusion == 'success' }}` vào các Jobs để đảm bảo file trước chạy thành công (xanh) thì luồng sau mới thực thi.
-
-![**Sửa deploy.yml**: Dùng `workflow_run` và `if: success` để Deploy đợi CI xanh.](./image_step/3_5_workflow_run_code.png)
-
-![**Nối tiếp hoàn hảo**: workflow Deploy tự động kích hoạt ngay sau khi workflow CI hoàn thành xuất sắc.](./image_step/3_6_workflow_run_chain.png)
-
----
-
-Tóm lại: `push` và `pull_request` phù hợp với dự án đơn lẻ. Họ `workflow_*` dùng khi cần điều phối CI/CD qua nhiều repo hoặc cần kiểm soát thủ công ở từng bước.
-
-## 4. Bonus: Tối ưu hoá Tốc độ Deploy (Chuyển sang dùng Docker Hub)
-
-Trong quá trình thực hành ở các phần trước, nếu tinh ý bạn sẽ thấy bước **Copy source code lên EC2** (dùng `appleboy/scp-action`) chạy rất chậm.
-
-**Vấn đề của "cicd basic":**
-Việc dùng `source: "./*"` sẽ gói hàng nghìn file mã nguồn nhỏ lẻ, đẩy qua mạng bằng giao thức SSH, rồi giải nén trên EC2. Sau đó EC2 lại phải còng lưng tự build đống code đó thành Docker Image. Cách này vừa chậm mạng, vừa làm nặng server Production, lại có nguy cơ lộ toàn bộ mã nguồn.
-
-![Dòng lệnh `source: "./*"` bắt SCP phải sao chép toàn bộ mã nguồn.](./image_step/4_1_slow_scp.png)
-
-**Giải pháp "Cách Nhanh Hơn" (Chuẩn DevOps):**
-Trong thực tế, **KHÔNG AI copy toàn bộ source code sang server production cả**. Kiến trúc DevOps chuẩn sẽ đi theo luồng sau:
-1. **GitHub Actions làm cật lực:** Nó tự build mã nguồn thành Docker Image ngay trên máy chủ siêu tốc của GitHub.
-2. **Kho trung chuyển:** GitHub Actions đẩy Image vừa build xong lên **Docker Hub** (hoặc AWS ECR).
-3. **Copy siêu tốc:** SCP lúc này CHỈ COPY DUY NHẤT 1 FILE là `docker-compose.yml` sang EC2 (mất chưa tới 1 giây).
-4. **EC2 nhàn hạ:** EC2 chỉ việc chạy lệnh `docker-compose pull` tải Image về và `docker-compose up -d` để khởi động ứng dụng.
-
-### Các Bước Triển Khai Thực Tế
-
-**Bước 1: Khai báo Secrets trên GitHub**
-Truy cập **Settings > Secrets and variables > Actions** của Repository, thêm 2 biến bắt buộc:
-- `DOCKER_USERNAME`: Tên đăng nhập Docker Hub của bạn.
-- `DOCKER_PASSWORD`: Mật khẩu (hoặc Access Token) Docker Hub.
-
-![**Thêm Secrets**: Cấu hình tài khoản Docker Hub lên GitHub.](./image_step/4_2_github_secrets.png)
-
-**Bước 2: Cập nhật file `docker-compose.yml`**
-Bổ sung thêm thuộc tính `image` vào các service (vẫn giữ lại `build` để hỗ trợ chạy ở local):
-```yaml
-services:
-  backend:
-    build: ./backend
-    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_backend:latest
-  frontend:
-    build: ./frontend
-    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_frontend:latest
-```
-
-**Bước 3: Viết lại luồng chạy trong `deploy.yml`**
-Cấu trúc lại luồng Deploy thành 2 Job riêng biệt:
-1. **Job 1 (Build & Push):** Đăng nhập Docker Hub bằng `docker/login-action`, sau đó dùng `docker/build-push-action` để đóng gói và đẩy Image lên kho lưu trữ.
-2. **Job 2 (Deploy Fast):** SCP đúng 1 file `docker-compose.yml` sang EC2. Tiếp theo dùng SSH truyền biến môi trường `$DOCKER_USERNAME` vào server và gõ lệnh `docker-compose pull` để kéo Image, rồi `docker-compose up -d` để chạy.
-
-![Luồng chạy siêu tốc với 2 Job riêng biệt rõ ràng.](./image_step/4_4_deploy_fast.png)
-
-*Trong mã nguồn dự án này, mình đã cập nhật sẵn toàn bộ code của cấu trúc "Siêu Tốc" này. Bạn có thể mở trực tiếp file `.github/workflows/deploy.yml` và `docker-compose.yml` để đối chiếu và tham khảo cú pháp chi tiết nhé!*
+**(Thực hành) Vấn đề với Cron job:**
+Nhiều người lập trình tạo nhánh `test-cron`, viết lịch hẹn giờ nhưng đợi mãi không thấy hệ thống nhúc nhích.
+![Lịch hẹn giờ không hoạt động trên nhánh phụ](./image_step/2_2_cron_not_running.png)
+Lý do là GitHub không lùng sục hàng trăm nhánh phụ để tìm lịch hẹn. Muốn lịch có hiệu lực thực tế, file YAML bắt buộc phải được merge vào nhánh `main`.
+![Sau khi merge vào main, luồng tự động kích hoạt đều đặn](./image_step/2_3_cron_running_after_merge.png)
+
+## Họ workflow_*
+
+Đây là bộ ba sự kiện (`dispatch` / `call` / `run`) chuyên dùng để liên kết các luồng làm việc lại với nhau, biến những file YAML rời rạc thành một hệ thống dây chuyền phức tạp. Giống như quy tắc ở trên, file chứa họ sự kiện này luôn bắt buộc phải được ký gửi ở nhánh `main`.
+
+- **`workflow_dispatch`:** Sinh ra một nút bấm (Manual trigger) ngay trên giao diện web. Hỗ trợ truyền thêm các tham số (inputs) khi chạy thủ công. Cực kỳ hữu dụng cho các luồng rủi ro cao cần sự kiểm soát của con người như dọn dẹp server hoặc rollback.
+  *(Lưu ý: Nút bấm chỉ xuất hiện khi file YAML đã nằm ở nhánh `main`. Nhưng khi nhấn nút, hệ thống cho phép tự do chọn chạy trên bất kỳ nhánh nào).*
+  ![Nút bấm Run workflow và tùy chọn nhánh](./image_step/3_2_dispatch_button_appeared.png)
+
+- **`workflow_call`:** Khai báo một file YAML là thư viện tái sử dụng (Reusable workflow). Điều này chấm dứt thảm họa copy-paste cùng một kịch bản Deploy cho 50 dự án khác nhau. Chỉ cần sửa code ở 1 nơi trung tâm, mọi kho lưu trữ gọi đến nó đều tự động được cập nhật.
+  ![Mô hình file trung tâm được gọi lại bởi nhiều repo khác nhau](./image_step/3_4_workflow_call_diagram.png)
+
+- **`workflow_run`:** Kích hoạt luồng B tự động ngay sau khi luồng A hoàn tất. Áp dụng chuẩn nguyên lý Fail-Fast: Luồng Deploy chứa mã nguồn nhạy cảm chỉ được phép chạy tiếp nếu luồng Test phía trước đã trả về trạng thái Success.
+  ![Dùng điều kiện success để khóa chốt an toàn](./image_step/3_5_workflow_run_code.png)
+  ![Nối chuỗi hoàn hảo: Test chạy xong mới tới Deploy](./image_step/3_6_workflow_run_chain.png)
+
+## Cache dependencies
+
+**Bản chất (Lý thuyết):**
+Trong các dự án NodeJS hay ReactJS, mỗi lần chạy CI/CD là một lần máy chủ phải còng lưng chạy `npm install` để tải lại hàng chục, hàng trăm MB thư viện, gây lãng phí thời gian vô cùng lớn. Cơ chế Cache giải quyết bài toán này bằng cách nén toàn bộ thư viện tải được ở lần đầu tiên và gửi lên kho lưu trữ của GitHub. Ở các lần chạy sau, nếu danh sách thư viện không có gì thay đổi, hệ thống sẽ kéo thẳng kho cache về dùng, tiết kiệm hàng phút đồng hồ so với việc tải lại từ mạng.
+
+**Cách triển khai (Step-by-step):**
+- **Bước 1: Băm (Hash) file khóa thư viện**
+  Mỗi khi bạn cài thư viện mới, file `package-lock.json` sẽ thay đổi. Hệ thống sẽ đọc file này và băm nó ra thành một chuỗi mã định danh duy nhất thông qua hàm `hashFiles('**/package-lock.json')`.
+- **Bước 2: Cấu hình lưu trữ Cache**
+  Sử dụng action `actions/cache` ngay trước bước `npm install`. Chỉ định thư mục muốn lưu (`node_modules`) và chìa khóa (key) chính là mã băm vừa tạo.
+  ```yaml
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+  ```
+- **Bước 3: Tận hưởng tốc độ siêu tốc**
+  Nếu mã hash không đổi (chưa cài thêm thư viện), hệ thống sẽ tìm thấy chìa khóa trùng khớp. Thời gian cài đặt `npm install` sẽ giảm từ hàng phút xuống chỉ còn vài giây!
+
+  *(Ảnh minh họa: Lần chạy đầu tiên - Không tìm thấy Cache, phải tải lại từ đầu)*
+  ![Lần chạy đầu tiên - Cache miss](./image_step/cache_miss.png)
+
+  *(Ảnh minh họa: Lần chạy thứ hai - Tải siêu tốc từ kho Cache)*
+  ![Lần chạy thứ hai - Cache hit](./image_step/cache_hit.png)
+
+## Matrix strategy
+
+**Bản chất (Lý thuyết):**
+Khi xây dựng các ứng dụng phức tạp, việc đảm bảo mã nguồn chạy ổn định trên đa dạng các môi trường là bắt buộc. Thay vì phải nhân bản (copy) file YAML ra thành hàng tá phiên bản đứt gãy để test từng cái một, chiến lược Ma trận (Matrix) cho phép định nghĩa một mảng các biến số đa chiều. Từ đó, GitHub Actions sẽ tự động nhân bản ra hàng loạt luồng chạy song song để phủ kín mọi tổ hợp môi trường.
+
+**Cách triển khai (Step-by-step):**
+- **Bước 1: Khai báo các chiều không gian của ma trận**
+  Dưới mục `strategy` của một Job, định nghĩa các mảng biến số. Ví dụ test trên 3 hệ điều hành và 3 phiên bản Node:
+  ```yaml
+  jobs:
+    test_code:
+      strategy:
+        matrix:
+          os: [ubuntu-latest, windows-latest, macos-latest]
+          node-version: [16, 18, 20]
+      runs-on: ${{ matrix.os }} # Động hóa hệ điều hành
+  ```
+- **Bước 2: Sử dụng biến ma trận trong luồng chạy**
+  ```yaml
+      steps:
+        - uses: actions/checkout@v4
+        - name: Cài đặt NodeJS
+          uses: actions/setup-node@v4
+          with:
+            node-version: ${{ matrix.node-version }} # Động hóa phiên bản Node
+  ```
+- **Bước 3: Hưởng thụ sức mạnh tự động nhân bản**
+  Hệ thống sẽ tự động tạo ra $3 \times 3 = 9$ luồng chạy độc lập (VD: Ubuntu chạy Node 16...). Sai ở đâu báo đỏ chính xác ở đó.
+
+## Docker Hub
+
+Hạn chế lớn nhất ở Part 1 là việc dùng SCP copy từng file mã nguồn qua mạng chật hẹp, bắt máy chủ EC2 yếu ớt phải vừa đóng vai web server vừa kiêm luôn vai build server. Điều này vắt kiệt bộ nhớ và rất dễ gây treo máy diện rộng.
+
+Kiến trúc chuẩn DevOps yêu cầu máy chủ EC2 phải hoàn toàn rảnh rỗi. Mọi tác vụ nặng nề phải được nhường lại cho GitHub Actions xử lý. Hệ thống GitHub Actions sẽ đảm nhận việc đóng gói mã nguồn thành một khối thống nhất (Docker Image), đẩy khối đó lên trung tâm lưu trữ (Docker Hub). Sau đó, EC2 chỉ việc "nhẹ nhàng" tải nguyên cục Image về và khởi chạy.
+
+**(Thực hành) Tối ưu hóa tốc độ với cấu trúc 2 Job:**
+1. Cấu hình 2 biến môi trường `DOCKER_USERNAME` và `DOCKER_PASSWORD` vào kho Secrets của GitHub để trao quyền tải lên.
+   ![Khai báo thông tin tài khoản Docker Hub vào Secrets](./image_step/4_2_github_secrets.png)
+2. Tách luồng cũ thành hai tiến trình rõ rệt. **Job 1 (Build & Push)**: Đóng gói và gửi Image lên kho. **Job 2 (Deploy Fast)**: Máy ảo EC2 kéo trực tiếp Image đã "nấu chín" từ Docker Hub về dùng.
+   Thay vì copy hàng trăm tệp, lệnh SCP ở Job 2 giờ đây chỉ cần truyền qua đúng một tệp tin nhẹ vài byte là `docker-compose.yml`. Mọi thứ diễn ra siêu tốc trong chớp mắt.
+   ![Luồng chạy siêu tốc với 2 Job độc lập](./image_step/4_4_deploy_fast.png)
+
+## permissions: block
+
+**Bản chất (Lý thuyết):**
+Mặc định, GitHub Actions được cấp một thẻ thông hành (`GITHUB_TOKEN`) có đặc quyền đọc/ghi khá rộng rãi. Nếu vô tình chạy một thư viện xấu từ bên thứ ba chứa mã độc, kho mã nguồn hoàn toàn có thể bị xóa hoặc phá hoại. Nguyên tắc "đặc quyền tối thiểu" (Least-Privilege) buộc chúng ta phải tước bỏ mọi quyền mặc định, luồng nào cần việc gì thì mới cấp đúng quyền đó.
+
+**Cách triển khai (Step-by-step):**
+- **Bước 1: Tước bỏ mọi đặc quyền mặc định**
+  Ở ngay đầu file `.yml`, thêm khối `permissions` và thiết lập mọi thứ về "chỉ đọc" hoặc cấm hoàn toàn.
+  ```yaml
+  permissions: read-all # Hoặc khắt khe hơn: permissions: {}
+  ```
+- **Bước 2: Chỉ cấp quyền cần thiết ở cấp độ Job**
+  Ví dụ, Job cần xin token OIDC của AWS thì chỉ Job đó mới được cấp quyền ghi token:
+  ```yaml
+  jobs:
+    deploy:
+      permissions:
+        id-token: write # Chỉ cấp quyền sinh token ngắn hạn
+        contents: read  # Quyền đọc mã nguồn
+  ```
+
+## OIDC cho AWS
+
+**Bản chất (Lý thuyết):**
+Việc lưu trữ khóa tĩnh (`AWS_ACCESS_KEY` hay `EC2_SSH_KEY`) vào GitHub Secrets gọi là sử dụng "khóa dài hạn" (Long-term credentials). Dù được mã hóa, nếu bị lộ, hệ thống sẽ bị chiếm quyền vĩnh viễn. Bảo mật hiện đại chuyển sang dùng OpenID Connect (OIDC). Cụ thể, hệ thống AWS và GitHub sẽ "bắt tay" xác thực với nhau mà không cần chìa khóa tĩnh. AWS sẽ cấp cho luồng chạy một "Token ngắn hạn" có tuổi thọ vài phút. Chạy xong là token tự hủy, không còn rủi ro lộ khóa.
+
+**Cách triển khai (Step-by-step):**
+- **Bước 1: Đăng ký GitHub làm "Khách quen" trên AWS**
+  Vào AWS IAM, tạo một Identity Provider trỏ URL về kho quản lý token của GitHub (`token.actions.githubusercontent.com`).
+- **Bước 2: Tạo IAM Role với Trust Relationship**
+  Tạo Role trên AWS chứa các quyền cần thiết. Cấu hình Trust relationships để AWS chỉ chấp nhận token phát ra từ đúng tên Repository và nhánh `main` của bạn.
+- **Bước 3: Xin quyền sinh Token trong GitHub Actions**
+  Cấp quyền `id-token: write` trong khối `permissions` của file YAML.
+- **Bước 4: Gọi Action cấu hình tự động**
+  Dùng action của AWS và truyền vào định danh (ARN) của Role vừa tạo.
+  ```yaml
+  - name: Configure AWS credentials
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::111122223333:role/MyGitHubDeployRole
+      aws-region: ap-southeast-1
+  ```
+
+## environment: + required reviewers
+
+**Bản chất (Lý thuyết):**
+Tự động hóa 100% luồng Deploy là đích đến lý tưởng, nhưng đưa thẳng một mạch mã nguồn lên máy chủ Production mà không qua kiểm duyệt bằng mắt là hành động mang rủi ro cực cao. Khái niệm `environment` tạo ra các ranh giới môi trường ảo. Đi kèm với nó là tính năng Cổng phê duyệt (Required reviewers), bắt buộc hệ thống phải "đóng băng" để chờ cái gật đầu của con người trước khi lên sóng.
+
+**Cách triển khai (Step-by-step):**
+- **Bước 1: Khởi tạo ranh giới môi trường ảo**
+  Truy cập **Settings > Environments** trên kho lưu trữ GitHub, tạo môi trường tên `production`.
+- **Bước 2: Thiết lập Cổng phê duyệt (Required reviewers)**
+  Đánh dấu tích vào "Required reviewers" và gán tên tài khoản của Lead/Manager vào danh sách.
+- **Bước 3: Gắn thẻ môi trường vào Job Deploy**
+  Bổ sung từ khóa `environment` vào Job cuối cùng.
+  ```yaml
+  jobs:
+    deploy_to_ec2:
+      runs-on: ubuntu-latest
+      environment: production # Gắn thẻ môi trường
+      steps:
+        # Các bước deploy...
+  ```
+  **Kết quả:** Dù mã nguồn đã vượt qua bài Test, luồng chạy vẫn bị dừng lại ở trạng thái chờ (vàng). Chỉ khi Lead vào xem và bấm nút duyệt (Approve) bằng tay, mã nguồn mới được Deploy lên server.
