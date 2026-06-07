@@ -1,9 +1,9 @@
 name: CI/CD Pipeline Docker
 
 # Concurrency: hủy luồng cũ nếu có luồng mới cùng nhóm
-# Lưu ý: dùng github.ref → mỗi nhánh là 1 nhóm riêng
+# Fix: bỏ github.ref → tất cả nhánh chung 1 nhóm, chống cross-branch collision
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 on:
