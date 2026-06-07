@@ -18,6 +18,7 @@ on:
 jobs:
   # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
   build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     name: 1. Build
     runs-on: ubuntu-latest
     steps:
