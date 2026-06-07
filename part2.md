@@ -97,6 +97,11 @@ on:
         default: 'staging'
 ```
 
+**Bản chất và quy tắc hoạt động:**
+- **Giải quyết bài toán gì?** Không phải lúc nào chúng ta cũng muốn tự động hóa 100%. Có những thao tác cực kỳ nhạy cảm (như deploy lên Production, dọn dẹp server, rollback) cần sự kiểm soát thủ công của con người. `workflow_dispatch` sinh ra để biến Actions thành chiếc "công tắc" bấm tay. Nó còn cho phép truyền thêm tham số đầu vào trực tiếp ngay trên giao diện web.
+- **Dùng khi nào?** Bất cứ khi nào bạn cần chạy một tác vụ DevOps một cách chủ động theo ý muốn, không phụ thuộc vào việc lập trình viên có push code hay không.
+- **Yêu cầu về nhánh:** Giống các thành viên trong họ `workflow_*`, file YAML chứa công tắc này **bắt buộc phải nằm ở nhánh `main`** để giao diện GitHub có thể nhận diện và vẽ ra nút bấm cho bạn.
+
 **Lỗi hay gặp:** viết `on: workflow_dispatch` vào một file ở nhánh `dev`, push lên, rồi vào tab Actions tìm nút bấm — nhưng tìm mãi không thấy. 
 
 Lý do là giao diện web của GitHub chỉ quét nhánh `main` để vẽ nút bấm, hoàn toàn tuân theo quy tắc "sự kiện ngoại cảnh" đã nói ở trên.
