@@ -150,6 +150,7 @@ docker-compose down
 ### Cấu hình CI/CD bằng GitHub Actions (Tự động hóa)
 
 Khi mã nguồn và server đã sẵn sàng, tiến hành thiết lập luồng CI/CD tự động 3 bước: **Build -> Deploy -> Show Log**.
+*(Lưu ý: Do tính chất nhập môn của bài lab, luồng Pipeline này tạm thời bỏ qua giai đoạn Test để tập trung vào triển khai cơ bản. Tuy nhiên, một bước "Show Log" được bổ sung ở cuối luồng nhằm hỗ trợ kiểm tra trạng thái và gỡ lỗi (debug) sau khi ứng dụng khởi chạy).*
 
 **1. Thiết lập GitHub Secrets**
 *Giải thích: Mục đích của bước này là cung cấp thông tin xác thực để môi trường GitHub Actions có quyền kết nối vào máy chủ EC2.*
