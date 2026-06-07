@@ -34,18 +34,18 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đo
 - **Runner:** Máy chủ (VM) đứng ra chạy các lệnh của bạn.
   - *Hosted runner:* Máy ảo do GitHub cung cấp sẵn (miễn phí).
   - *Self-hosted runner:* Máy chủ riêng do bạn tự cung cấp và gắn vào GitHub.
-- **Event:** Sự kiện "bóp cò" kích hoạt workflow (như `push`, `pull_request`).
+- **Event:** Sự kiện kích hoạt (trigger) workflow (như `push`, `pull_request`).
 - **Secret:** Biến môi trường mã hóa (dùng chứa mật khẩu, API key, SSH key).
 - **Artifact:** Sản phẩm sinh ra giữa chừng (như file nén `.zip`, file `.jar`) được lưu lại để tải về hoặc chuyển cho Job sau.
 - **Environment:** Môi trường triển khai ảo (như `production`, `staging`) dùng để thiết lập lớp rào chắn phê duyệt (Reviewers).
 
 ## Test trong CI
 
-Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn bắt buộc để đảm bảo nhánh chính luôn "xanh rờn".
+Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn bắt buộc để đảm bảo mã nguồn trên nhánh chính luôn ổn định (Passed).
 
 ## Deploy strategies
 
-Khi đẩy code mới lên Production, chúng ta có các chiến lược để tránh làm sập web người dùng:
+Khi đẩy code mới lên Production, chúng ta có các chiến lược để tránh gây gián đoạn dịch vụ (downtime):
 - **Rolling Deployment:** Cập nhật từ từ từng máy chủ một.
 - **Blue-Green Deployment:** Tạo hẳn một môi trường mới tinh (Green), test chạy mượt rồi mới đổi đường dẫn (Router) từ môi trường cũ (Blue) sang môi trường mới. Rất an toàn, có lỗi thì lùi lại ngay lập tức.
 - **Canary Deployment:** Đưa bản mới cho 5% lượng người dùng truy cập. Thấy ổn định thì mở dần lên 100%.
@@ -184,7 +184,7 @@ jobs:
           # [TÙY CHỈNH] Lệnh build tương ứng với dự án
           docker compose build
 
-  # Bước 2: Bắn code sang Server và yêu cầu Docker khởi chạy
+  # Bước 2: Truyền tải mã nguồn sang Server và yêu cầu Docker khởi chạy
   deploy:
     name: 2. Deploy
     runs-on: ubuntu-latest
@@ -274,24 +274,24 @@ git push
 ```
 ![cicd chạy](./image_step/anh_12_cicd.png)
 
-**3. Hưởng thụ thành quả tự động hóa**
+**3. Kiểm tra kết quả triển khai tự động**
 Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trình mới đang tự động chạy. Đợi báo xanh, sau đó mở trình duyệt và truy cập lại vào **Public IP**. Giao diện mới với dòng chữ vừa sửa sẽ lập tức hiện ra!
 
 ![Chụp màn hình trình duyệt với giao diện web đã được cập nhật thành công](./image_step/anh_11_web_update_thanh_cong.png)
 
 ---
 
-## Map ngược vào khung theo gạch đầu dòng thứ 3
+## Phân tích Pipeline thực tế theo 4 Stage chuẩn
 
 Đối chiếu lại luồng `deploy.yml` ở Phần Case Study với khung lý thuyết, ta thấy:
 - **Stage Source/Checkout:** Tương ứng với step `uses: actions/checkout@v4`.
 - **Stage Build:** Tương ứng với step chạy lệnh `docker-compose build`.
-- **Stage Test:** Hiện tại đang bị KHUYẾT (Pipeline nhập môn chưa thiết lập).
+- **Stage Test:** Chưa được cấu hình (Pipeline cơ bản hiện chưa thiết lập bước chạy Unit Test).
 - **Stage Deploy:** Tương ứng với Job Deploy, dùng SCP copy code và SSH để chạy `docker-compose up`.
 
 ## Hạn chế của pipeline
 
-Dù đã tự động hóa, nhưng Case Study trên còn vô số nhược điểm (đây cũng là động lực để học Part 2):
-- **Chậm chạp:** Dùng SCP copy hàng trăm file mã nguồn qua mạng tốn rất nhiều thời gian.
-- **Nặng Server:** Bắt máy chủ EC2 yếu ớt (như `t2.micro`) tự Build code, rất dễ gây treo máy do cạn RAM.
-- **Thiếu kiểm soát đồng thời (Concurrency):** Nếu 2 người cùng push code một lúc, 2 luồng sẽ chạy song song ghi đè lên nhau gây sập dữ liệu.
+Mặc dù đã tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại một số hạn chế (sẽ được khắc phục ở Part 2):
+- **Hiệu suất truyền tải thấp:** Việc sử dụng giao thức SCP để sao chép hàng trăm tệp tin mã nguồn nhỏ lẻ qua mạng gây lãng phí rất nhiều thời gian.
+- **Tiêu hao tài nguyên Server:** Yêu cầu máy chủ EC2 cấu hình thấp (như `t2.micro`) tự thực hiện Build mã nguồn rất dễ dẫn đến tình trạng treo hệ thống do tràn bộ nhớ (Out of Memory).
+- **Thiếu kiểm soát đồng thời (Concurrency):** Nếu hai lập trình viên cùng push mã nguồn cùng thời điểm, hai tiến trình triển khai sẽ chạy song song và gây xung đột dữ liệu.
