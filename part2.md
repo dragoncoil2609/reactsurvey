@@ -117,6 +117,9 @@ Khi xây dựng các ứng dụng phức tạp, việc đảm bảo mã nguồn 
 - **Bước 3: Hưởng thụ sức mạnh tự động nhân bản**
   Hệ thống sẽ tự động tạo ra $3 \times 3 = 9$ luồng chạy độc lập (VD: Ubuntu chạy Node 16...). Sai ở đâu báo đỏ chính xác ở đó.
 
+  *(Ảnh minh họa: Giao diện GitHub Actions tự động sinh ra 9 luồng chạy song song từ 1 cấu hình duy nhất)*
+  ![Sức mạnh nhân bản của Matrix](./image_step/matrix_runs.png)
+
 ## Docker Hub
 
 Hạn chế lớn nhất ở Part 1 là việc dùng SCP copy từng file mã nguồn qua mạng chật hẹp, bắt máy chủ EC2 yếu ớt phải vừa đóng vai web server vừa kiêm luôn vai build server. Điều này vắt kiệt bộ nhớ và rất dễ gây treo máy diện rộng.
