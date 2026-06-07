@@ -6,10 +6,14 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
+# Sử dụng workflow_run để file Deploy này chỉ chạy SAU KHI file CI chạy xong
 on:
-  push:
+  workflow_run:
+    workflows: ["CI - Build & Test"]
+    types:
+      - completed
     branches:
-      - main        # CD chỉ chạy khi merge vào main
+      - main
 
 jobs:
   # Bước 1: Kiểm tra xem source code có Build thành Docker Image thành công không
