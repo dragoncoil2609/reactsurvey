@@ -102,13 +102,19 @@ Bài toán thực tế: 50 repo có quy trình deploy giống nhau. Copy paste f
 
 ![Sơ đồ minh họa: 1 file workflow_call ở repo trung tâm được nhiều repo khác nhau gọi lại](./image_step/3_4_workflow_call_diagram.png)
 
+### `workflow_call`
+
+Sự kiện này biến một file YAML thành thư viện tái sử dụng — file YAML khác ở bất kỳ repo nào trong tổ chức đều có thể gọi vào.
+
+Bài toán thực tế: 50 repo có quy trình deploy giống nhau. Copy paste file `deploy.yml` sang 50 chỗ thì mỗi lần sửa phải cập nhật 50 nơi. Với `workflow_call`, chỉ cần một file trung tâm; 50 repo còn lại gọi vào bằng một dòng trỏ link. Sửa một chỗ, 50 repo áp dụng theo.
+
 ### `workflow_run`
 
 Sự kiện này kích hoạt một workflow khi một workflow khác vừa chạy xong.
 
-Dùng để tách biệt trách nhiệm: `test.yml` lo kiểm thử, `deploy.yml` lo triển khai, `workflow_run` nối hai bên lại. Deploy chỉ chạy khi test xanh. Hai file có thể ở hai repo khác nhau mà vẫn kết nối được qua sự kiện này.
+Dùng để tách biệt trách nhiệm: `ci.yml` lo kiểm thử, `deploy.yml` lo triển khai, `workflow_run` nối hai bên lại. Deploy chỉ chạy khi test xanh.
 
-![Chụp màn hình tab Actions hiển thị workflow Deploy được kích hoạt tự động ngay sau khi workflow Test hoàn thành thành công](./image_step/3_5_workflow_run_chain.png)
+![**Nối tiếp hoàn hảo**: workflow Deploy tự động kích hoạt ngay sau khi workflow CI hoàn thành xuất sắc.](./image_step/3_5_workflow_run_chain.png)
 
 ---
 
