@@ -25,7 +25,7 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đo
 - **Test:** Chạy các bài kiểm thử tự động (Unit Test, Integration Test).
 - **Deploy:** Triển khai sản phẩm hoàn thiện lên Server.
 
-## Thuật ngữ Github Actions: workflow / job / step / action / runner (hosted vs self-hosted) / event / secret / artifact / environment
+## Thuật ngữ Github Actions
 
 - **Workflow:** Một luồng CI/CD hoàn chỉnh (tương ứng với 1 file YAML).
 - **Job:** Một cụm tác vụ trong workflow. (Ví dụ Job Build, Job Deploy).
