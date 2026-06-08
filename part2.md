@@ -152,6 +152,7 @@ Mặc định, GitHub Actions được cấp một thẻ thông hành (`GITHUB_T
 - **Bước 2: Chỉ cấp quyền cần thiết ở cấp độ Job**
   Ví dụ, Job cần xin token OIDC của AWS thì chỉ Job đó mới được cấp quyền ghi token:
   ```yaml
+  ```yaml
   jobs:
     deploy:
       permissions:
@@ -159,6 +160,56 @@ Mặc định, GitHub Actions được cấp một thẻ thông hành (`GITHUB_T
         contents: read  # Quyền đọc mã nguồn
   ```
 
+**(Thực hành) Demo: Chặn và cấp quyền ghi mã nguồn**
+
+Để hiểu rõ sự lợi hại của `permissions`, chúng ta sẽ tạo một luồng chạy thử cố gắng **Push một file mới** lên Github. Nếu không có quyền ghi (`contents: write`), GitHub sẽ chặn đứng hành động này.
+
+**1. Kịch bản lỗi (403 Forbidden):**
+Tạo file `.github/workflows/demo-permissions.yml` với cấu hình tước bỏ mọi quyền:
+
+```yaml
+name: Demo Permissions
+on: [workflow_dispatch]
+
+permissions: read-all # Ép tất cả về chỉ-đọc
+
+jobs:
+  test_push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tạo file nháp
+        run: echo "Hello World" > test.txt
+      - name: Thử Push code lên (Sẽ bị chặn)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add test.txt
+          git commit -m "Add test file"
+          git push
+```
+Khi chạy tay luồng này, tiến trình sẽ báo lỗi đỏ chót ở bước Push vì nó chỉ có đặc quyền `read-all` (chỉ được phép đọc code, không được quyền sửa đổi).
+![Lỗi 403 do bị chặn quyền ghi](./image_step/5_1_permission_denied.png)
+
+**2. Cấp quyền đúng chỗ để sửa lỗi:**
+Bây giờ, chúng ta sẽ mở khóa đúng một quyền duy nhất cho job này: `contents: write`. Cập nhật lại file YAML:
+
+```yaml
+name: Demo Permissions
+on: [workflow_dispatch]
+
+permissions: read-all # Mặc định vẫn là chỉ-đọc cho an toàn
+
+jobs:
+  test_push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Chỉ cấp riêng quyền ghi mã nguồn cho job này
+    steps:
+      # ... (giữ nguyên các bước Checkout và Push)
+```
+Khi chạy lại, GitHub Actions đã có thẻ thông hành hợp lệ và tiến trình Push diễn ra thành công mỹ mãn. Nguyên tắc "Đặc quyền tối thiểu" luôn được tuân thủ.
+![Tiến trình thành công sau khi cấp quyền write](./image_step/5_2_permission_success.png)
 ## OIDC cho AWS
 
 **Bản chất (Lý thuyết):**

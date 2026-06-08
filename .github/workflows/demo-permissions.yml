@@ -1,0 +1,19 @@
+name: Demo Permissions
+on: [workflow_dispatch]
+
+permissions: read-all # Ép tất cả về chỉ-đọc
+
+jobs:
+  test_push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tạo file nháp
+        run: echo "Hello World" > test.txt
+      - name: Thử Push code lên (Sẽ bị chặn)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add test.txt
+          git commit -m "Add test file"
+          git push
