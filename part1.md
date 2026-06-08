@@ -1,4 +1,4 @@
-# Hướng dẫn Toàn tập: Triển khai Ứng dụng Web lên AWS EC2 bằng Docker và Thiết lập CI/CD với GitHub Actions
+# Xây Dựng Luồng CI/CD Cơ Bản Với GitHub Actions & EC2
 
 Bài viết này hướng dẫn chi tiết cách "đóng gói" một ứng dụng Web (gồm Frontend React và Backend Node.js) bằng Docker, sau đó đưa lên máy chủ AWS EC2. Cuối cùng, thiết lập một luồng CI/CD với GitHub Actions để tự động hóa hoàn toàn quá trình triển khai.
 
@@ -13,13 +13,18 @@ Bài viết này hướng dẫn chi tiết cách "đóng gói" một ứng dụn
 
 ## Tại sao cần CI/CD
 
-- Loại bỏ hoàn toàn sự rườm rà, sai sót của con người (như SSH vào server gõ lệnh thủ công).
-- Giúp team phát hiện lỗi (bug) cực sớm nhờ quá trình Test tự động.
-- Tốc độ đưa tính năng mới ra thị trường nhanh gấp nhiều lần.
+- Loại bỏ sự rườm rà, sai sót của con người (như SSH vào server gõ lệnh thủ công).
+- Giúp team phát hiện lỗi (bug) sớm nhờ quá trình Test tự động.
+- Tốc độ đưa tính năng mới ra thị trường nhanh hơn nhiều lần.
 
 ## Các stage chuẩn của pipeline
 
-Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đoạn:
+Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường diễn ra theo chuỗi các giai đoạn sau:
+
+```text
+[Source/Checkout] ──> [Build] ──> [Test] ──> [Deploy]
+```
+
 - **Source/Checkout:** Lấy mã nguồn mới nhất từ kho lưu trữ.
 - **Build:** Đóng gói mã nguồn thành sản phẩm (như Build Docker Image, dịch mã Java...).
 - **Test:** Chạy các bài kiểm thử tự động (Unit Test, Integration Test).
@@ -31,6 +36,7 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đo
 - **Job:** Một cụm tác vụ trong workflow. (Ví dụ Job Build, Job Deploy).
 - **Step:** Một bước nhỏ trong Job (ví dụ: gõ một lệnh bash).
 - **Action:** Các công cụ có sẵn được cộng đồng viết để tái sử dụng (như action copy file, action đăng nhập docker).
+  *Lưu ý: Bạn nên chỉ định rõ phiên bản (versioning) của action như `@v4` hoặc `@v1.0.3` thay vì dùng nhánh `@main` hoặc `@master`. Việc "chốt" phiên bản giúp pipeline hoạt động ổn định, tránh bị lỗi bất ngờ khi tác giả thư viện cập nhật code làm thay đổi cấu trúc.*
 - **Runner:** Máy chủ (VM) đứng ra chạy các lệnh của bạn.
   - *Hosted runner:* Máy ảo do GitHub cung cấp sẵn (miễn phí).
   - *Self-hosted runner:* Máy chủ riêng do bạn tự cung cấp và gắn vào GitHub.
@@ -39,9 +45,11 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường gồm 4 giai đo
 - **Artifact:** Sản phẩm sinh ra giữa chừng (như file nén `.zip`, file `.jar`) được lưu lại để tải về hoặc chuyển cho Job sau.
 - **Environment:** Môi trường triển khai ảo (như `production`, `staging`) dùng để thiết lập lớp rào chắn phê duyệt (Reviewers).
 
+> Tham khảo tài liệu: [Understanding GitHub Actions - GitHub Docs](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions)
+
 ## Test trong CI
 
-Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn bắt buộc để đảm bảo mã nguồn trên nhánh chính luôn ổn định (Passed).
+Chạy CI mà không có Test đồng nghĩa với việc tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn quan trọng để đảm bảo mã nguồn trên nhánh chính luôn ổn định (Passed).
 - **Unit Test:** Kiểm tra từng hàm nhỏ độc lập xem logic cốt lõi có đúng không.
 - **Integration Test:** Đảm bảo các module khi ghép lại (hoặc khi gọi Database) vẫn giao tiếp chuẩn xác.
 - **E2E Test:** Giả lập thao tác thực tế trên giao diện để chạy xuyên suốt một luồng nghiệp vụ.
@@ -50,7 +58,7 @@ Chạy CI mà không có Test thì chẳng khác gì tự động hóa việc đ
 
 Khi đẩy code mới lên Production, chúng ta có các chiến lược để tránh gây gián đoạn dịch vụ (downtime):
 - **Rolling Deployment:** Cập nhật từ từ từng máy chủ một.
-- **Blue-Green Deployment:** Tạo hẳn một môi trường mới tinh (Green), test chạy mượt rồi mới đổi đường dẫn (Router) từ môi trường cũ (Blue) sang môi trường mới. Rất an toàn, có lỗi thì lùi lại ngay lập tức.
+- **Blue-Green Deployment:** Tạo hẳn một môi trường mới tinh (Green), test chạy mượt rồi mới đổi đường dẫn (Router) từ môi trường cũ (Blue) sang môi trường mới. Khá an toàn và dễ dàng quay lui (rollback).
 - **Canary Deployment:** Đưa bản mới cho 5% lượng người dùng truy cập. Thấy ổn định thì mở dần lên 100%.
 
 ---
@@ -60,6 +68,9 @@ Khi đẩy code mới lên Production, chúng ta có các chiến lược để 
 ### Chuẩn bị Source Code (Thực hiện trên máy cá nhân)
 
 Trước khi thao tác với server, mã nguồn dự án cần được cấu hình Docker và đẩy lên GitHub. Để tiết kiệm thời gian, có thể tham khảo trực tiếp source code mẫu đã được setup sẵn từ A-Z (đã bao gồm file `docker-compose.yml`, cấu hình Nginx proxy và kết nối DB bằng biến môi trường).
+
+**Khuyến nghị về file `.dockerignore`:**
+Một bước cực kỳ quan trọng trước khi tiến hành build mã nguồn bằng Docker là tạo file `.dockerignore`. Bạn cần liệt kê các thư mục như `node_modules/`, `.git/` vào file này để ngăn Docker đẩy hàng trăm MB rác vào Image. Điều này giúp quá trình build diễn ra siêu nhanh và tối ưu bộ nhớ máy chủ.
 
 **Kho lưu trữ mã nguồn mẫu:**
 https://github.com/dragoncoil2609/reactsurvey.git
@@ -161,6 +172,8 @@ Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions
 3. `EC2_SSH_KEY`: Nội dung file `my-key.pem`.
 
 ![Giao diện trang Settings/Secrets trên GitHub với 3 biến đã được thêm](./image_step/anh_7_github_secrets.png)
+
+> Tham khảo tài liệu: [Using secrets in GitHub Actions - GitHub Docs](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions)
 
 **2. Tạo Workflow File**
 Tại máy tính cá nhân, tạo một file tên là `.github/workflows/deploy.yml` trong thư mục dự án:
@@ -293,11 +306,13 @@ Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trìn
 - **Stage Test:** Chưa được cấu hình (Pipeline cơ bản hiện chưa thiết lập bước chạy Unit Test).
 - **Stage Deploy:** Tương ứng với Job Deploy, dùng SCP copy code và SSH để chạy `docker-compose up`.
 
-## Hạn chế của pipeline
+## Điểm hạn chế của pipeline cơ bản
 
-Mặc dù đã tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại 5 "lỗ hổng" chí mạng (sẽ được khắc phục triệt để ở Part 2):
-- **Gây gián đoạn dịch vụ (Downtime):** Mỗi lần Deploy, lệnh `docker compose down` sẽ làm sập server hoàn toàn cho đến khi quá trình build mới hoàn tất. Trải nghiệm người dùng sẽ bị gián đoạn.
-- **Không có cơ chế quay lui (Rollback):** Code mới được build và ghi đè thẳng lên bản cũ. Nếu bản mới chứa bug nghiêm trọng làm sập web, hệ thống không có cách nào tự động quay về phiên bản ổn định trước đó.
-- **Hiệu suất truyền tải thấp:** Việc sử dụng giao thức SCP để sao chép hàng trăm tệp tin mã nguồn nhỏ lẻ qua mạng gây lãng phí rất nhiều thời gian.
-- **Tiêu hao tài nguyên Server:** Yêu cầu máy chủ EC2 cấu hình thấp (như `t2.micro`) tự thực hiện Build mã nguồn rất dễ dẫn đến tình trạng treo hệ thống do tràn bộ nhớ (Out of Memory).
-- **Thiếu kiểm soát đồng thời (Concurrency):** Nếu hai lập trình viên cùng push mã nguồn cùng thời điểm, hai tiến trình triển khai sẽ chạy song song và gây xung đột dữ liệu.
+Mặc dù đã hoàn thành mục tiêu tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại 5 điểm hạn chế cần cải thiện (sẽ được giải quyết triệt để ở Part 2):
+- **Gây gián đoạn dịch vụ (Downtime):** Mỗi lần Deploy, lệnh `docker compose down` sẽ làm ngưng toàn bộ dịch vụ cho đến khi quá trình build mới hoàn tất. Trải nghiệm người dùng sẽ bị gián đoạn.
+- **Thiếu cơ chế quay lui (Rollback) tự động:** Code mới được build và ghi đè thẳng lên bản cũ. Nếu bản mới chứa lỗi nghiêm trọng làm hỏng hệ thống, việc quay về phiên bản ổn định trước đó khá khó khăn và thủ công.
+- **Hiệu suất truyền tải thấp:** Việc sử dụng giao thức SCP để sao chép hàng trăm tệp tin mã nguồn nhỏ lẻ qua mạng gây lãng phí rất nhiều thời gian chờ đợi.
+- **Nguy cơ quá tải Server:** Yêu cầu máy chủ EC2 cấu hình thấp (như `t2.micro`) tự thực hiện quá trình Build mã nguồn có thể dẫn đến tràn RAM (Out of Memory) và treo máy chủ.
+- **Chưa có kiểm soát đồng thời (Concurrency):** Nếu hai lập trình viên cùng push mã nguồn vào nhánh main cùng một thời điểm, hai tiến trình triển khai sẽ chạy đè lên nhau, gây ra rủi ro xung đột dữ liệu.
+
+*(Mời bạn chuyển sang Part 2 để tiếp tục nâng cấp hệ thống và giải quyết triệt để các vấn đề trên!)*
