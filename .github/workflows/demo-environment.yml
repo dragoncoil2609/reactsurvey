@@ -1,0 +1,20 @@
+name: Demo Environment Review
+on: [workflow_dispatch]
+
+jobs:
+  build_code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Giả lập quá trình Build
+        run: |
+          echo "Đang build code..."
+          sleep 5
+          echo "Build thành công! Chuẩn bị deploy..."
+
+  deploy_to_ec2:
+    needs: build_code # Đợi job build chạy xong
+    runs-on: ubuntu-latest
+    environment: production # Gắn thẻ môi trường để kích hoạt chờ duyệt
+    steps:
+      - name: Giả lập quá trình Deploy
+        run: echo "Đã nhận được cái gật đầu của sếp, đang đẩy code lên EC2..."
