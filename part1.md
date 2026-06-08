@@ -1,6 +1,6 @@
 # Xây Dựng Luồng CI/CD Cơ Bản Với GitHub Actions & EC2
 
-Bài viết này hướng dẫn chi tiết cách "đóng gói" một ứng dụng Web (gồm Frontend React và Backend Node.js) bằng Docker, sau đó đưa lên máy chủ AWS EC2. Cuối cùng, thiết lập một luồng CI/CD với GitHub Actions để tự động hóa hoàn toàn quá trình triển khai.
+Phần 1 này hướng dẫn cách triển khai một ứng dụng Web (gồm Frontend React và Backend Node.js) lên AWS EC2 bằng Docker, và thiết lập luồng CI/CD với GitHub Actions để tự động hóa quá trình đó.
 
 *Lưu ý: Để bài hướng dẫn ngắn gọn và tập trung vào luồng CI/CD, máy ảo EC2 sẽ được tạo trong Default VPC. Trong thực tế, nên cấu hình VPC riêng để bảo mật hơn.*
 
@@ -9,26 +9,31 @@ Bài viết này hướng dẫn chi tiết cách "đóng gói" một ứng dụn
 ## CI/CD là gì
 
 - **CI (Continuous Integration - Tích hợp liên tục):** Là tự động hóa việc gộp code, build và chạy test thường xuyên mỗi khi có code mới đẩy lên nhánh chung.
-- **CD (Continuous Delivery/Deployment - Phân phối/Triển khai liên tục):** Là tự động đóng gói ứng dụng và đưa nó lên các môi trường (Staging, Production) một cách liền mạch.
+- **CD (Continuous Delivery - Phân phối liên tục):** Tự động đưa ứng dụng đến trạng thái sẵn sàng phát hành, nhưng bước deploy lên Production cuối cùng vẫn cần **phê duyệt thủ công** (bấm nút).
+- **CD (Continuous Deployment - Triển khai liên tục):** Mức cao hơn — mã nguồn vượt qua hết các vòng kiểm tra sẽ **tự động lên thẳng Production** mà không cần con người can thiệp.
 
 ## Tại sao cần CI/CD
 
-- Loại bỏ sự rườm rà, sai sót của con người (như SSH vào server gõ lệnh thủ công).
-- Giúp team phát hiện lỗi (bug) sớm nhờ quá trình Test tự động.
-- Tốc độ đưa tính năng mới ra thị trường nhanh hơn nhiều lần.
+- **Tính nhất quán (Consistency):** Mọi lần deploy đều chạy qua đúng một quy trình chuẩn, không có chuyện "máy anh chạy được, máy chủ không chạy".
+- **Lưu vết (Audit trail):** Hệ thống ghi lại ai deploy bản nào, lúc mấy giờ, fail ở bước nào — dễ điều tra khi có sự cố.
+- **Rollback nhanh:** Mỗi lần chạy pipeline là một snapshot. Khi bản mới lỗi, có thể quay về bản cũ chỉ bằng một thao tác.
+- **Scale team:** CI tự động cấp luồng test riêng cho từng nhánh/PR, giúp nhiều người làm việc song song mà không giẫm lên nhau.
 
 ## Các stage chuẩn của pipeline
 
 Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường diễn ra theo chuỗi các giai đoạn sau:
 
 ```text
-[Source/Checkout] ──> [Build] ──> [Test] ──> [Deploy]
+[Source] ──> [Build] ──> [Test] ──> [Quality Gate] ──> [Package] ──> [Deploy] ──> [Verify]
 ```
 
 - **Source/Checkout:** Lấy mã nguồn mới nhất từ kho lưu trữ.
-- **Build:** Đóng gói mã nguồn thành sản phẩm (như Build Docker Image, dịch mã Java...).
-- **Test:** Chạy các bài kiểm thử tự động (Unit Test, Integration Test).
-- **Deploy:** Triển khai sản phẩm hoàn thiện lên Server.
+- **Build:** Biên dịch, đóng gói mã nguồn (compile, bundle...).
+- **Test:** Chạy kiểm thử tự động (Unit Test, Integration Test).
+- **Quality Gate:** Chốt chặn đánh giá chất lượng: độ phủ test, điểm bảo mật... Nếu không đạt ngưỡng, pipeline dừng ngay, không cho đi tiếp.
+- **Package:** Đóng gói thành Artifact phát hành (Docker Image, file `.jar`, file `.zip`...).
+- **Deploy:** Đưa Artifact lên môi trường đích (Staging, Production).
+- **Verify:** Chạy Smoke test — gõ nhẹ vào server vừa deploy để xác nhận hệ thống thực sự sống.
 
 ## Thuật ngữ Github Actions
 
@@ -44,22 +49,41 @@ Một luồng CI/CD (Pipeline) chuẩn công nghiệp thường diễn ra theo c
 - **Secret:** Biến môi trường mã hóa (dùng chứa mật khẩu, API key, SSH key).
 - **Artifact:** Sản phẩm sinh ra giữa chừng (như file nén `.zip`, file `.jar`) được lưu lại để tải về hoặc chuyển cho Job sau.
 - **Environment:** Môi trường triển khai ảo (như `production`, `staging`) dùng để thiết lập lớp rào chắn phê duyệt (Reviewers).
+- **Context Expression `${{ ... }}`:** Cú pháp để đọc giá trị động trong file YAML — ví dụ `${{ secrets.EC2_HOST }}` đọc Secret, `${{ github.sha }}` lấy mã commit hiện tại.
+- **`needs:`** Khai báo thứ tự phụ thuộc giữa các Job. Job có `needs: build` sẽ chờ Job `build` chạy xong thành công mới bắt đầu.
+- **`if:`** Điều kiện chạy có điều kiện — ví dụ `if: github.ref == 'refs/heads/main'` chỉ cho phép deploy khi push lên nhánh `main`.
 
 > Tham khảo tài liệu: [Understanding GitHub Actions - GitHub Docs](https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions)
 
 ## Test trong CI
 
-Chạy CI mà không có Test đồng nghĩa với việc tự động hóa việc đưa lỗi (bug) lên Production. Test (Unit Test, Integration Test) là chốt chặn quan trọng để đảm bảo mã nguồn trên nhánh chính luôn ổn định (Passed).
+Chạy CI mà không có Test đồng nghĩa với việc tự động hóa việc đưa lỗi (bug) lên Production. Test là chốt chặn (Quality Gate) quan trọng để đảm bảo mã nguồn trên nhánh chính luôn ổn định.
+- **Lint / Static Analysis:** Quét lỗi cú pháp và vi phạm coding convention trước khi chạy bất cứ thứ gì (VD: ESLint cho JS).
+- **Security Scan:** Kiểm tra các thư viện phụ thuộc có lỗ hổng bảo mật đã biết không (VD: `npm audit`, Trivy).
 - **Unit Test:** Kiểm tra từng hàm nhỏ độc lập xem logic cốt lõi có đúng không.
 - **Integration Test:** Đảm bảo các module khi ghép lại (hoặc khi gọi Database) vẫn giao tiếp chuẩn xác.
-- **E2E Test:** Giả lập thao tác thực tế trên giao diện để chạy xuyên suốt một luồng nghiệp vụ.
+- **Smoke Test:** Sau khi Deploy, tự động gõ vào endpoint để xác nhận web đang sống (xem thêm phần Healthcheck ở dưới).
+
+*Ví dụ YAML tích hợp chuỗi Test vào pipeline:*
+```yaml
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run lint    # Lint
+      - run: npm audit       # Security scan
+      - run: npm test        # Unit test
+```
 
 ## Deploy strategies
 
-Khi đẩy code mới lên Production, chúng ta có các chiến lược để tránh gây gián đoạn dịch vụ (downtime):
-- **Rolling Deployment:** Cập nhật từ từ từng máy chủ một.
-- **Blue-Green Deployment:** Tạo hẳn một môi trường mới tinh (Green), test chạy mượt rồi mới đổi đường dẫn (Router) từ môi trường cũ (Blue) sang môi trường mới. Khá an toàn và dễ dàng quay lui (rollback).
-- **Canary Deployment:** Đưa bản mới cho 5% lượng người dùng truy cập. Thấy ổn định thì mở dần lên 100%.
+Khi đẩy code mới lên Production, có các chiến lược deploy phổ biến:
+- **Recreate:** Tắt toàn bộ hệ thống cũ, khởi động bản mới. Đơn giản nhất nhưng sẽ **có Downtime**. Đây là chiến lược bài thực hành này đang dùng.
+- **Rolling Deployment:** Cập nhật từng máy chủ một, không có downtime.
+- **Blue-Green Deployment:** Tạo môi trường mới (Green) chạy song song, test xong mới chuyển traffic sang. Không downtime, rollback dễ.
+- **Canary Deployment:** Đưa bản mới cho 5% người dùng trước, nếu ổn thì mở rộng dần. Không downtime, ít rủi ro nhất.
 
 ---
 
@@ -85,6 +109,7 @@ Thao tác trên giao diện của AWS:
 2. **OS**: Chọn **Ubuntu Server 22.04 LTS** (hoặc 24.04 LTS).
 3. **Network**: Dùng Default VPC để có sẵn Public IP.
 4. **Security Group**: Mở port `22` (để SSH) và port `80` (để truy cập Web).
+   > **Lưu ý bảo mật:** Không mở port `22` cho `0.0.0.0/0` (toàn thế giới) ở môi trường thật. Chỉ cho phép IP cụ thể của bạn để tránh bị dò mật khẩu (brute-force).
 5. Tạo và tải về máy một **Key Pair** (ví dụ: `my-key.pem`).
 
 **2. Cài đặt Docker bằng Shell Script**
@@ -115,10 +140,11 @@ sudo apt update
 sudo apt install -y docker-ce
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+# Pin version cụ thể để đảm bảo tính ổn định (reproducibility)
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 docker --version
-docker-compose --version
+docker compose version
 ```
 *(Sử dụng tổ hợp phím Ctrl+O, Enter để lưu, rồi Ctrl+X để thoát).*
 
@@ -144,7 +170,7 @@ git clone https://github.com/your-username/your-repo-name.git ~/app
 2. Di chuyển vào thư mục và khởi chạy dự án:
 ```bash
 cd ~/app
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ![Màn hình terminal đang chạy tiến trình docker-compose build/pull image](./image_step/anh_5_docker_compose_build.png)
@@ -155,7 +181,7 @@ docker-compose up -d --build
 
 4. Sau khi xác nhận ứng dụng hoạt động ổn định, gõ lệnh sau để dừng ứng dụng và dọn dẹp môi trường cho GitHub Actions:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Cấu hình CI/CD bằng GitHub Actions (Tự động hóa)
@@ -164,7 +190,7 @@ Khi mã nguồn và server đã sẵn sàng, tiến hành thiết lập luồng 
 *(Lưu ý: Do tính chất nhập môn của bài lab, luồng Pipeline này tạm thời bỏ qua giai đoạn Test để tập trung vào triển khai cơ bản. Tuy nhiên, một bước "Show Log" được bổ sung ở cuối luồng nhằm hỗ trợ kiểm tra trạng thái và gỡ lỗi (debug) sau khi ứng dụng khởi chạy).*
 
 **1. Thiết lập GitHub Secrets**
-*Giải thích: Mục đích của bước này là cung cấp thông tin xác thực để môi trường GitHub Actions có quyền kết nối vào máy chủ EC2.*
+Mục đích: cung cấp thông tin xác thực để GitHub Actions có quyền SSH vào EC2.
 
 Trên giao diện repo GitHub, vào **Settings > Secrets and variables > Actions** và thêm 3 biến bảo mật sau:
 1. `EC2_HOST`: Địa chỉ IP Public của EC2.
@@ -252,6 +278,10 @@ jobs:
             
             echo "--- LOG HOẠT ĐỘNG ---"
             docker compose logs --tail=50
+
+            echo "--- SMOKE TEST ---"
+            sleep 5
+            curl -f http://localhost:80 && echo "OK: Web đang sống!" || (echo "FAIL: Web không phản hồi!" && exit 1)
 ```
 
 ![Chụp màn hình code file deploy.yml trên VS Code](./image_step/anh_8_deploy_yml.png)
@@ -271,7 +301,7 @@ Mở file `frontend/src/App.jsx` trên máy tính cá nhân, tìm đến phần 
 
 ```jsx
 // Tìm dòng chứa thẻ <h1> và sửa thành:
-<h1>🚀 To-Do List (Đã tự động hóa CI/CD!)</h1>
+<h1>To-Do List (Đã tự động hóa CI/CD!)</h1>
 
 // Hoặc chèn thêm một đoạn text thông báo bên dưới:
 <p style={{ color: 'green', textAlign: 'center', fontWeight: 'bold' }}>
@@ -302,13 +332,13 @@ Chuyển sang tab **Actions** trên GitHub, bạn sẽ thấy một tiến trìn
 
 Đối chiếu lại luồng `deploy.yml` ở Phần Case Study với khung lý thuyết, ta thấy:
 - **Stage Source/Checkout:** Tương ứng với step `uses: actions/checkout@v4`.
-- **Stage Build:** Tương ứng với step chạy lệnh `docker-compose build`.
+- **Stage Build:** Tương ứng với step chạy lệnh `docker compose build`.
 - **Stage Test:** Chưa được cấu hình (Pipeline cơ bản hiện chưa thiết lập bước chạy Unit Test).
-- **Stage Deploy:** Tương ứng với Job Deploy, dùng SCP copy code và SSH để chạy `docker-compose up`.
+- **Stage Deploy:** Tương ứng với Job Deploy, dùng SCP copy code và SSH để chạy `docker compose up`.
 
 ## Điểm hạn chế của pipeline cơ bản
 
-Mặc dù đã hoàn thành mục tiêu tự động hóa, nhưng luồng triển khai cơ bản trên vẫn tồn tại 5 điểm hạn chế cần cải thiện (sẽ được giải quyết triệt để ở Part 2):
+Mặc dù đã hoàn thành mục tiêu tự động hóa, luồng này vẫn còn 5 điểm hạn chế. Part 2 sẽ giải quyết **3 hạn chế có thể áp dụng ngay** (tốc độ deploy, quá tải server, bảo mật key). Hai vấn đề còn lại (Downtime, Rollback tự động) cần kiến trúc phức tạp hơn như Kubernetes hoặc Blue-Green:
 - **Gây gián đoạn dịch vụ (Downtime):** Mỗi lần Deploy, lệnh `docker compose down` sẽ làm ngưng toàn bộ dịch vụ cho đến khi quá trình build mới hoàn tất. Trải nghiệm người dùng sẽ bị gián đoạn.
 - **Thiếu cơ chế quay lui (Rollback) tự động:** Code mới được build và ghi đè thẳng lên bản cũ. Nếu bản mới chứa lỗi nghiêm trọng làm hỏng hệ thống, việc quay về phiên bản ổn định trước đó khá khó khăn và thủ công.
 - **Hiệu suất truyền tải thấp:** Việc sử dụng giao thức SCP để sao chép hàng trăm tệp tin mã nguồn nhỏ lẻ qua mạng gây lãng phí rất nhiều thời gian chờ đợi.
