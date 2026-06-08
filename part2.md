@@ -175,6 +175,8 @@ Việc lưu trữ khóa tĩnh (`AWS_ACCESS_KEY` hay `EC2_SSH_KEY`) vào GitHub S
   Vào AWS IAM, tạo một Identity Provider trỏ URL về kho quản lý token của GitHub (`token.actions.githubusercontent.com`).
 - **Bước 2: Tạo IAM Role với Trust Relationship**
   Tạo Role trên AWS chứa các quyền cần thiết. Cấu hình Trust relationships để AWS chỉ chấp nhận token phát ra từ đúng tên Repository và nhánh `main` của bạn.
+  *(Ảnh minh họa: Cấu hình Trust Relationship giới hạn quyền truy cập cho repo)*
+  ![Cấu hình Web Identity cho IAM Role](./image_step/image.png)
 - **Bước 3: Xin quyền sinh Token trong GitHub Actions**
   Cấp quyền `id-token: write` trong khối `permissions` của file YAML.
 - **Bước 4: Gọi Action cấu hình tự động**
