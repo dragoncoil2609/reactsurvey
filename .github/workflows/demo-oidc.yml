@@ -13,7 +13,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-southeast-1 # Thay đổi nếu EC2 của anh ở vùng khác
+          aws-region: us-east-1 # Thay đổi nếu EC2 của bạn ở vùng khác
           
       - name: Thử gọi lệnh AWS CLI
         run: |
