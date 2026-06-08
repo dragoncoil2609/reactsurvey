@@ -1,0 +1,11 @@
+.git
+.github
+.gitignore
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+README.md
+part1.md
+part2.md
+image_step
