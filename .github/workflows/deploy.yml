@@ -1,9 +1,9 @@
 name: CI/CD Pipeline Docker
 
 # Concurrency: hủy luồng cũ nếu có luồng mới cùng nhóm
-# Fix: bỏ github.ref → tất cả nhánh chung 1 nhóm, chống cross-branch collision
+# Fix: Nhóm theo môi trường để tránh block chéo
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ env.DEPLOY_TARGET || 'production' }}
   cancel-in-progress: true
 
 # Sử dụng workflow_run để file Deploy này chỉ chạy SAU KHI file CI chạy xong
@@ -26,6 +26,8 @@ jobs:
 #     steps:
 #       - name: Checkout code
 #         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.event.workflow_run.head_sha }}
 # 
 #       - name: Kiểm tra Build Frontend & Backend
 #         run: |
@@ -39,6 +41,8 @@ jobs:
 #     steps:
 #       - name: Checkout code
 #         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.event.workflow_run.head_sha }}
 # 
 #       - name: Copy source code lên EC2
 #         uses: appleboy/scp-action@v0.1.7
@@ -57,8 +61,8 @@ jobs:
 #           key: ${{ secrets.EC2_SSH_KEY }}
 #           script: |
 #             cd ~/app
-#             docker-compose down
-#             docker-compose up -d --build
+#             docker compose down
+#             docker compose up -d --build
 
 # ==========================================
 # CÁCH 2: NHANH HƠN (BUILD TRÊN GITHUB ACTIONS -> PUSH LÊN DOCKER HUB -> EC2 CHỈ KÉO IMAGE VỀ CHẠY)
@@ -68,28 +72,30 @@ jobs:
     name: 1. Build & Push Image
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout code (Lấy đúng SHA của luồng trước)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Đăng nhập Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          password: ${{ secrets.DOCKER_PAT }}
           
       - name: Build và Push Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/crud_backend:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/crud_backend:${{ github.sha }},${{ secrets.DOCKER_USERNAME }}/crud_backend:latest
           
       - name: Build và Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/crud_frontend:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/crud_frontend:${{ github.sha }},${{ secrets.DOCKER_USERNAME }}/crud_frontend:latest
 
   deploy_fast:
     name: 2. Deploy
@@ -98,6 +104,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Copy duy nhất file docker-compose.yml lên EC2
         uses: appleboy/scp-action@v0.1.7
@@ -112,24 +120,26 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: DOCKER_USERNAME
+          envs: DOCKER_USERNAME, IMAGE_TAG
           script: |
             cd ~/app
             export DOCKER_USERNAME=$DOCKER_USERNAME
-            docker-compose pull
-            docker-compose down
-            docker-compose up -d
+            export IMAGE_TAG=$IMAGE_TAG
+            docker compose pull
+            docker compose down
+            docker compose up -d
 
-  show_log:
-    name: 3. Test / Show log
+  verify:
+    name: 3. Verify / Smoke Test
     runs-on: ubuntu-latest
     needs: deploy_fast
     steps:
-      - name: In log trạng thái
+      - name: In log và kiểm tra Healthcheck
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -140,5 +150,8 @@ jobs:
             echo "--- Danh sách Container đang chạy ---"
             docker ps
             
-            echo "--- LOG CỦA BACKEND VÀ FRONTEND ---"
-            docker-compose logs --tail=50
+            echo "Đợi ứng dụng khởi động (10s)..."
+            sleep 10
+            echo "Smoke test trang chủ:"
+            curl -f http://localhost:80 || exit 1
+            echo "Triển khai thành công, ứng dụng đang sống!"

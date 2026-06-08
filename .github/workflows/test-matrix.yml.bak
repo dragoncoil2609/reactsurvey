@@ -1,29 +1,30 @@
-name: Test Matrix Strategy
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+# name: Test Matrix Strategy
+# on:
+#   push:
+#     branches: [ "main" ]
+#   workflow_dispatch:
 
-jobs:
-  test_matrix:
-    # Cấu hình siêu ma trận 3x3
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: [16, 18, 20]
+# jobs:
+#   test_matrix:
+#     # Cấu hình siêu ma trận 3x3
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         os: [ubuntu-latest, windows-latest, macos-latest]
+#         node-version: [16, 18, 20]
         
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Kiem tra thong tin
-        shell: bash
-        run: |
-          echo "Hệ điều hành: ${{ matrix.os }}"
-          echo "Cài đặt Node: ${{ matrix.node-version }}"
+#     runs-on: ${{ matrix.os }}
+#     steps:
+#       - name: Kiem tra thong tin
+#         shell: bash
+#         run: |
+#           echo "Hệ điều hành: ${{ matrix.os }}"
+#           echo "Cài đặt Node: ${{ matrix.node-version }}"
           
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ matrix.node-version }}
           
-      - name: Xac nhan thanh cong
-        shell: bash
-        run: node -v
+#       - name: Xac nhan thanh cong
+#         shell: bash
+#         run: node -v

@@ -20,7 +20,7 @@ services:
 
   backend:
     build: ./backend
-    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_backend:latest
+    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_backend:${IMAGE_TAG:-latest}
     container_name: crud_backend
     restart: always
     depends_on:
@@ -37,7 +37,7 @@ services:
 
   frontend:
     build: ./frontend
-    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_frontend:latest
+    image: ${DOCKER_USERNAME:-dragoncoil2609}/crud_frontend:${IMAGE_TAG:-latest}
     container_name: crud_frontend
     restart: always
     depends_on:
