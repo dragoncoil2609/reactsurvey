@@ -1,7 +1,7 @@
 name: Demo Permissions
 on: [workflow_dispatch]
 
-permissions: read-all # Ép tất cả về chỉ-đọc
+permissions: read-all # Tước bỏ mọi quyền ghi
 
 jobs:
   test_push:
