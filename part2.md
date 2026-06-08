@@ -144,7 +144,7 @@ Hai lưu ý quan trọng khi cấu hình:
 2. **Không lạm dụng tag `:latest`:** Việc đẩy Image lên với tag `:latest` sẽ khiến bạn rất khó khăn để Rollback khi có lỗi xảy ra ở bản mới. Thay vào đó, hãy sử dụng `${{ github.sha }}` để đánh tag Image theo mã băm của từng lượt commit. Như vậy mỗi bản build sẽ có một ID duy nhất.
 
 **(Thực hành) Tối ưu hóa tốc độ với cấu trúc 2 Job:**
-Khai báo hai biến môi trường `DOCKER_USERNAME` và `DOCKER_PASSWORD` (chứa PAT) vào kho Secrets của GitHub.
+Khai báo hai biến môi trường `DOCKER_USERNAME` và `DOCKER_PAT` vào kho Secrets của GitHub (tạo PAT tại Docker Hub > Security > Access Tokens, đặt tên Secret là `DOCKER_PAT`).
 ![Khai báo thông tin tài khoản Docker Hub vào Secrets](./image_step/4_2_github_secrets.png)
 
 Tách luồng thành hai tiến trình rõ rệt: 
