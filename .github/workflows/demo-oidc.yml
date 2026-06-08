@@ -1,0 +1,21 @@
+name: Demo OIDC AWS
+on: [workflow_dispatch]
+
+permissions:
+  id-token: write # Bắt buộc phải có quyền này để Github xin token
+  contents: read
+
+jobs:
+  test_oidc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-1 # Thay đổi nếu EC2 của anh ở vùng khác
+          
+      - name: Thử gọi lệnh AWS CLI
+        run: |
+          echo "Thử gọi API AWS kiểm tra danh tính..."
+          aws sts get-caller-identity
