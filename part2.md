@@ -144,42 +144,22 @@ Kiến trúc chuẩn DevOps yêu cầu máy chủ EC2 phải hoàn toàn rảnh 
 Mặc định, GitHub Actions được cấp một thẻ thông hành (`GITHUB_TOKEN`) có đặc quyền đọc/ghi khá rộng rãi. Nếu vô tình chạy một thư viện xấu từ bên thứ ba chứa mã độc, kho mã nguồn hoàn toàn có thể bị xóa hoặc phá hoại. Nguyên tắc "đặc quyền tối thiểu" (Least-Privilege) buộc chúng ta phải tước bỏ mọi quyền mặc định, luồng nào cần việc gì thì mới cấp đúng quyền đó.
 
 **Cách triển khai (Step-by-step):**
-- **Bước 1: Tước bỏ mọi đặc quyền mặc định (Demo lỗi 403)**
-  Tạo file `.github/workflows/demo-permissions.yml` cố gắng Push một file lên nhánh `main`. Ở ngay đầu file, thêm khối `permissions: read-all` để tước bỏ mọi quyền ghi.
+- **Bước 1: Tước bỏ mọi đặc quyền mặc định**
+  Ở ngay đầu file `.yml`, thêm khối `permissions` và thiết lập mọi thứ về "chỉ đọc" hoặc cấm hoàn toàn.
   ```yaml
-  name: Demo Permissions
-  on: [workflow_dispatch]
-
-  permissions: read-all # Tước bỏ mọi quyền ghi
-
-  jobs:
-    test_push:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - name: Tạo file nháp
-          run: echo "Hello World" > test.txt
-        - name: Thử Push code lên (Sẽ bị chặn)
-          run: |
-            git config user.name "github-actions"
-            git config user.email "github-actions@github.com"
-            git add test.txt
-            git commit -m "Add test file"
-            git push
+  permissions: read-all # Hoặc khắt khe hơn: permissions: {}
   ```
   *(Ảnh minh họa: Tiến trình báo lỗi 403 Forbidden do bị tước quyền ghi)*
   ![Lỗi 403 do bị chặn quyền ghi](./image_step/5_1_permission_denied.png)
 
-- **Bước 2: Chỉ cấp quyền cần thiết ở cấp độ Job (Sửa lỗi)**
-  Để sửa lỗi, chúng ta mở khóa duy nhất quyền `contents: write` cho đúng Job `test_push`. Cập nhật lại file YAML:
+- **Bước 2: Chỉ cấp quyền cần thiết ở cấp độ Job**
+  Ví dụ, Job cần xin token OIDC của AWS thì chỉ Job đó mới được cấp quyền ghi token:
   ```yaml
   jobs:
-    test_push:
-      runs-on: ubuntu-latest
+    deploy:
       permissions:
-        contents: write # Chỉ cấp riêng quyền ghi mã nguồn cho job này
-      steps:
-        # ... (giữ nguyên các bước Checkout và Push)
+        id-token: write # Chỉ cấp quyền sinh token ngắn hạn
+        contents: read  # Quyền đọc mã nguồn
   ```
   *(Ảnh minh họa: Tiến trình chạy thành công sau khi được cấp đúng quyền cần thiết)*
   ![Tiến trình thành công sau khi cấp quyền chuẩn](./image_step/5_2_permission_success.png)
@@ -192,21 +172,35 @@ Việc lưu trữ khóa tĩnh (`AWS_ACCESS_KEY` hay `EC2_SSH_KEY`) vào GitHub S
 
 **Cách triển khai (Step-by-step):**
 - **Bước 1: Đăng ký GitHub làm "Khách quen" trên AWS**
-  Vào AWS IAM, tạo một Identity Provider trỏ URL về kho quản lý token của GitHub (`token.actions.githubusercontent.com`).
+  Vào AWS IAM > Identity providers > Add provider. Chọn OpenID Connect, URL: `https://token.actions.githubusercontent.com`, Audience: `sts.amazonaws.com`.
 - **Bước 2: Tạo IAM Role với Trust Relationship**
-  Tạo Role trên AWS chứa các quyền cần thiết. Cấu hình Trust relationships để AWS chỉ chấp nhận token phát ra từ đúng tên Repository và nhánh `main` của bạn.
-- **Bước 3: Xin quyền sinh Token trong GitHub Actions**
-  Cấp quyền `id-token: write` trong khối `permissions` của file YAML.
-- **Bước 4: Gọi Action cấu hình tự động**
-  Dùng action của AWS và truyền vào định danh (ARN) của Role vừa tạo.
+  Tạo Role trên AWS (chọn Web identity vừa tạo). Gắn quyền (ví dụ `AmazonS3ReadOnlyAccess` để test). Cấu hình Trust relationships để AWS chỉ chấp nhận token phát ra từ đúng repo của bạn. Copy đoạn ARN của Role vừa tạo (VD: `arn:aws:iam::111122223333:role/GithubDemoRole`).
+- **Bước 3: Lưu ARN vào Github Secrets**
+  Vào Settings > Secrets của kho mã nguồn, tạo Secret tên `AWS_ROLE_ARN` và dán cái ARN vừa copy vào.
+- **Bước 4: Cấu hình Github Actions gọi OIDC**
+  Tạo file `.github/workflows/demo-oidc.yml` để test việc gọi token và lấy danh tính từ AWS mà không cần Access Key dài hạn:
   ```yaml
-  - name: Configure AWS credentials
-    uses: aws-actions/configure-aws-credentials@v4
-    with:
-      role-to-assume: arn:aws:iam::111122223333:role/MyGitHubDeployRole
-      aws-region: ap-southeast-1
+  name: Demo OIDC AWS
+  on: [workflow_dispatch]
+
+  permissions:
+    id-token: write # Bắt buộc: Quyền xin token OIDC
+    contents: read
+
+  jobs:
+    test_oidc:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Cấu hình AWS Credentials qua OIDC
+          uses: aws-actions/configure-aws-credentials@v4
+          with:
+            role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+            aws-region: ap-southeast-1
+            
+        - name: Thử gọi lệnh AWS CLI (Kiểm tra danh tính)
+          run: aws sts get-caller-identity
   ```
-  *(Ảnh minh họa: Cấu hình OIDC thành công, GitHub Actions nhận được Token từ AWS)*
+  *(Ảnh minh họa: Cấu hình OIDC thành công, GitHub Actions nhận được Token từ AWS và in ra danh tính)*
   ![Cấu hình OIDC thành công](./image_step/6_oidc_success.png)
 
 ## environment: + required reviewers
