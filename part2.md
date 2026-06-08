@@ -189,6 +189,9 @@ Việc lưu trữ khóa tĩnh (`AWS_ACCESS_KEY` hay `EC2_SSH_KEY`) vào GitHub S
   *(Ảnh minh họa: Cấu hình OIDC thành công, GitHub Actions nhận được Token từ AWS)*
   ![Cấu hình OIDC thành công](./image_step/6_oidc_success.png)
 
+- **Bước 5: Xóa bỏ khóa dài hạn (Triệt tiêu rủi ro)**
+  Đây là bước quan trọng nhất sau khi đã chuyển đổi luồng chạy sang dùng OIDC hoàn toàn (ví dụ: dùng OIDC kết hợp AWS SSM để vào máy chủ thay vì dùng SSH thuần).
+  Khi đó, thao tác bắt buộc là vào **Settings > Secrets** của GitHub và mạnh tay bấm nút "Thùng rác" để xóa bỏ các biến chứa khóa tĩnh (trong ví dụ của dự án này chính là `EC2_SSH_KEY`). Không còn khóa tĩnh lưu trên hệ thống = Hacker không có gì để đánh cắp!
 ## environment: + required reviewers
 
 **Bản chất (Lý thuyết):**
