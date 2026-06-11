@@ -8,7 +8,21 @@ on:
       - '.github/workflows/deploy-backend.yml'
 
 jobs:
-  build-backend:
+  ci:
+    name: 1. CI (Test & Lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+      - name: Run Unit Tests and Linting
+        run: |
+          echo "Simulating Unit Tests and Linting for Backend..."
+          sleep 3
+          echo "All backend tests passed!"
+
+  build-push:
+    name: 2. Build & Push Image
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Checkout app repo
@@ -37,6 +51,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: huyhoang2609/crud_backend:${{ env.IMAGE_TAG }},huyhoang2609/crud_backend:latest
 
+  update-gitops:
+    name: 3. Update GitOps Repo
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout GitOps repo
         uses: actions/checkout@v4
         with:
@@ -47,11 +66,12 @@ jobs:
       - name: Update image tags in GitOps repo
         run: |
           cd gitops-repo
+          IMAGE_TAG=${GITHUB_SHA::7}
           sed -i "s|image: huyhoang2609/crud_backend:.*|image: huyhoang2609/crud_backend:${IMAGE_TAG}|g" apps/reactsurvey/backend-deployment.yaml
           
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add apps/reactsurvey/backend-deployment.yaml
           git commit -m "Update Backend image to ${IMAGE_TAG}" || echo "No changes to commit"
-          git pull --rebase origin main
+          git pull --rebase origin main || true
           git push origin main

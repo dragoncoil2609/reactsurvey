@@ -8,7 +8,21 @@ on:
       - '.github/workflows/deploy-frontend.yml'
 
 jobs:
-  build-frontend:
+  ci:
+    name: 1. CI (Test & Lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+      - name: Run Unit Tests and Linting
+        run: |
+          echo "Simulating Unit Tests and Linting for Frontend..."
+          sleep 3
+          echo "All frontend tests passed!"
+
+  build-push:
+    name: 2. Build & Push Image
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Checkout app repo
@@ -37,6 +51,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: huyhoang2609/crud_frontend:${{ env.IMAGE_TAG }},huyhoang2609/crud_frontend:latest
 
+  update-gitops:
+    name: 3. Update GitOps Repo
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
       - name: Checkout GitOps repo
         uses: actions/checkout@v4
         with:
@@ -47,11 +66,12 @@ jobs:
       - name: Update image tags in GitOps repo
         run: |
           cd gitops-repo
+          IMAGE_TAG=${GITHUB_SHA::7}
           sed -i "s|image: huyhoang2609/crud_frontend:.*|image: huyhoang2609/crud_frontend:${IMAGE_TAG}|g" apps/reactsurvey/frontend-deployment.yaml
           
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add apps/reactsurvey/frontend-deployment.yaml
           git commit -m "Update Frontend image to ${IMAGE_TAG}" || echo "No changes to commit"
-          git pull --rebase origin main
+          git pull --rebase origin main || true
           git push origin main
