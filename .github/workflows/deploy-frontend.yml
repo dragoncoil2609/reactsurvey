@@ -53,4 +53,5 @@ jobs:
           git config user.email "actions@github.com"
           git add apps/reactsurvey/frontend-deployment.yaml
           git commit -m "Update Frontend image to ${IMAGE_TAG}" || echo "No changes to commit"
+          git pull --rebase origin main
           git push origin main
