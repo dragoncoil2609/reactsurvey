@@ -1,0 +1,56 @@
+name: Deploy Backend
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Backend (Multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: huyhoang2609/crud_backend:${{ env.IMAGE_TAG }},huyhoang2609/crud_backend:latest
+
+      - name: Checkout GitOps repo
+        uses: actions/checkout@v4
+        with:
+          repository: dragoncoil2609/minikube-gitops
+          token: ${{ secrets.PAT_TOKEN }}
+          path: gitops-repo
+
+      - name: Update image tags in GitOps repo
+        run: |
+          cd gitops-repo
+          sed -i "s|image: huyhoang2609/crud_backend:.*|image: huyhoang2609/crud_backend:${IMAGE_TAG}|g" apps/reactsurvey/backend-deployment.yaml
+          
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add apps/reactsurvey/backend-deployment.yaml
+          git commit -m "Update Backend image to ${IMAGE_TAG}" || echo "No changes to commit"
+          git push origin main
